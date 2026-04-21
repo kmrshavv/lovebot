@@ -1037,14 +1037,12 @@ if clear_clicked:
     st.toast("Chat cleared 🧹")
     st.rerun()
 # ================= ADVANCED UPLOAD =================
+# ================= ADVANCED UPLOAD =================
 import re
 
 def smart_chunk(text, chunk_size=500):
-    """Split text intelligently (sentence-aware)"""
     sentences = re.split(r'(?<=[.!?]) +', text)
-    
-    chunks = []
-    current = ""
+    chunks, current = [], ""
 
     for sent in sentences:
         if len(current) + len(sent) < chunk_size:
@@ -1059,6 +1057,9 @@ def smart_chunk(text, chunk_size=500):
     return chunks
 
 
+# ===== SAFE DEFAULT =====
+unique_chunks = []
+
 if uploaded_files:
 
     all_chunks = []
@@ -1068,62 +1069,47 @@ if uploaded_files:
 
         for file in uploaded_files:
             try:
-                # ===== FILE VALIDATION =====
-                if file.size > 5 * 1024 * 1024:  # 5MB limit
-                    st.warning(f"⚠️ {file.name} too large, skipped")
+                if file.size > 5 * 1024 * 1024:
+                    st.warning(f"⚠️ {file.name} too large")
                     skipped_files += 1
                     continue
 
-                # ===== READ FILE =====
                 if file.type == "application/pdf":
                     text = read_pdf(file)
                 else:
                     text = file.read().decode("utf-8", errors="ignore")
 
                 if not text.strip():
-                    st.warning(f"⚠️ {file.name} empty or unreadable")
                     skipped_files += 1
                     continue
 
-                # ===== CLEAN TEXT =====
-                text = text.replace("\n", " ")
-                text = " ".join(text.split())
-
-                # ===== SMART CHUNKING =====
-                chunks = smart_chunk(text, chunk_size=500)
+                text = " ".join(text.replace("\n", " ").split())
+                chunks = smart_chunk(text)
 
                 all_chunks.extend(chunks)
 
             except Exception as e:
-                print(f"❌ Error processing {file.name}: {e}")
+                print(f"❌ {file.name}: {e}")
                 skipped_files += 1
 
-    # ===== REMOVE DUPLICATES =====
+    # REMOVE DUPLICATES
     unique_chunks = list(dict.fromkeys(all_chunks))
 
-# ================= ULTRA MEMORY CONTROL =================
 
-def optimize_chunks(chunks, max_len=400):
-    """Clean + compress chunks"""
-    cleaned = []
-    for c in chunks:
-        c = c.strip()
+# ================= MEMORY PROCESS (SAFE) =================
+if unique_chunks:
 
-        # skip very small / useless chunks
-        if len(c) < 30:
-            continue
+    optimized_chunks = optimize_chunks(unique_chunks)
 
-        # compress long chunks
-        if len(c) > max_len:
-            c = c[:max_len] + "..."
+    existing_set = set(st.session_state.knowledge)
+    new_chunks = [c for c in optimized_chunks if c not in existing_set]
 
-        cleaned.append(c)
+    st.session_state.knowledge = (
+        st.session_state.knowledge + new_chunks
+    )[-50:]
 
-    return cleaned
+    st.success(f"🧠 Learned {len(new_chunks)} chunks")
 
-
-# ===== PROCESS MEMORY =====
-optimized_chunks = optimize_chunks(unique_chunks)
 
 # Remove duplicates (stronger)
 existing_set = set(st.session_state.knowledge)
