@@ -1,11 +1,7 @@
 import streamlit as st
 import pickle, random, time
-import json
-
-from openai import OpenAI
-import google.generativeai as genai
 from serpapi import GoogleSearch
-
+import google.generativeai as genai
 from pypdf import PdfReader
 
 # ==============================
@@ -21,22 +17,17 @@ model, vectorizer, df = pickle.load(open("model.pkl", "rb"))
 # ==============================
 # API KEYS
 # ==============================
-try:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    SERP_KEY = st.secrets["SERPAPI_KEY"]
-except Exception as e:
-    st.error(f"❌ API Error: {e}")
-    st.stop()
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+SERP_KEY = st.secrets["SERPAPI_KEY"]
 
 # ==============================
-# SESSION STATE
+# SESSION
 # ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "knowledge" not in st.session_state:
-    st.session_state.knowledge = ""
+    st.session_state.knowledge = []
 
 if "show_password" not in st.session_state:
     st.session_state.show_password = False
@@ -44,20 +35,20 @@ if "show_password" not in st.session_state:
 # ==============================
 # GOOGLE SEARCH
 # ==============================
-def google_search(q):
+def google_search(query):
     try:
         res = GoogleSearch({
-            "q": q,
+            "q": query,
             "api_key": SERP_KEY,
             "num": 3
         }).get_dict()
 
-        return " ".join(r.get("snippet","") for r in res.get("organic_results", []))
+        return [r.get("snippet","") for r in res.get("organic_results", [])]
     except:
-        return ""
+        return []
 
 # ==============================
-# FILE LEARNING
+# PDF READER
 # ==============================
 def read_pdf(file):
     text = ""
@@ -67,77 +58,84 @@ def read_pdf(file):
     return text
 
 # ==============================
-# GEMINI BACKUP
+# KNOWLEDGE RETRIEVAL
 # ==============================
-def gemini_reply(prompt):
-    try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        res = model.generate_content(prompt)
-        return res.text
-    except:
-        return None
+def retrieve_knowledge(query):
+    relevant = []
+    for chunk in st.session_state.knowledge:
+        if any(word in chunk.lower() for word in query.lower().split()):
+            relevant.append(chunk)
+    return relevant[:5]
 
 # ==============================
-# MAIN AI
+# 🧠 SMART AI
 # ==============================
 def smart_reply(user_input):
     try:
-        history = st.session_state.messages[-6:]
-        search = google_search(user_input)
-        knowledge = st.session_state.knowledge[:3000]
+        model_ai = genai.GenerativeModel("gemini-1.5-flash")
 
-        system = f"""
+        history = st.session_state.messages[-5:]
+        search_results = google_search(user_input)
+        local_knowledge = retrieve_knowledge(user_input)
+
+        prompt = f"""
 You are LoveBot 💖
 
-Talk like a real human:
-- short replies
+Behave like a real human:
 - emotional
+- short replies
+- intelligent
 - no repetition
 
-Use knowledge if helpful:
-{knowledge}
+Think before answering.
+
+Conversation:
+{history}
+
+Internet:
+{search_results}
+
+Knowledge:
+{local_knowledge}
+
+User: {user_input}
 """
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system},
-                *history,
-                {"role": "user", "content": f"{user_input}\n{search}"}
-            ],
-            temperature=0.8
-        )
-
-        return response.choices[0].message.content
+        response = model_ai.generate_content(prompt)
+        return response.text
 
     except Exception as e:
-        st.warning("⚠️ OpenAI failed, switching to backup")
-        gem = gemini_reply(user_input)
-        if gem:
-            return gem
-        return "I'm thinking… something feels off 💭"
+        print(e)
+        return "I'm thinking deeply… something interrupted me 💭"
 
 # ==============================
 # UI
 # ==============================
-st.title("💖 LoveBot")
-st.caption("Hello my Love ❤️")
+st.title("💖 LoveBot Pro")
+st.caption("Smarter. Learns. Thinks. Remembers. 🧠")
 
 # ==============================
-# FILE UPLOAD (LEARNING)
+# 📂 FILE UPLOAD
 # ==============================
 st.subheader("📂 Teach LoveBot")
 
-uploaded = st.file_uploader("Upload PDF / Text", type=["pdf","txt"])
+files = st.file_uploader(
+    "Upload PDF / Text",
+    type=["pdf","txt"],
+    accept_multiple_files=True
+)
 
-if uploaded:
-    if uploaded.type == "application/pdf":
-        text = read_pdf(uploaded)
-    else:
-        text = uploaded.read().decode("utf-8")
+if files:
+    for file in files:
+        if file.type == "application/pdf":
+            text = read_pdf(file)
+        else:
+            text = file.read().decode("utf-8")
 
-    st.session_state.knowledge += "\n" + text
-    st.success("Learned from your file 💡")
+        chunks = [text[i:i+500] for i in range(0, len(text), 500)]
+        st.session_state.knowledge.extend(chunks)
+
+    st.success("Learned from files 💡")
 
 # ==============================
 # CHAT DISPLAY
@@ -151,39 +149,36 @@ for msg in st.session_state.messages:
 # ==============================
 # INPUT
 # ==============================
-user_input = st.chat_input("Type your message 💬")
+user_input = st.chat_input("Ask anything… 💬")
 
 # ==============================
 # MAIN LOGIC
 # ==============================
 if user_input:
-
     st.session_state.messages.append({"role":"user","content":user_input})
 
-    # Photo trigger
+    # PHOTO TRIGGER
     if any(w in user_input.lower() for w in ["photo","memory","pics"]):
         answer = "I have something special ❤️ Enter passkey 🔐"
         st.session_state.show_password = True
-
     else:
         matches = df[df["question"].str.lower().str.contains(user_input.lower())]
 
-        if len(user_input) < 12 and not matches.empty:
+        if len(user_input) < 10 and not matches.empty:
             answer = matches.sample().iloc[0]["answer"]
         else:
             answer = smart_reply(user_input)
 
-    with st.spinner("Thinking 💭"):
-        time.sleep(0.6)
+    with st.spinner("Thinking 🧠💭"):
+        time.sleep(0.7)
 
-    answer += random.choice([" ❤️"," 💖"," 🥺",""])
+    answer += random.choice([" ❤️"," 💖"," 🧠",""])
 
     st.session_state.messages.append({"role":"assistant","content":answer})
-
     st.rerun()
 
 # ==============================
-# 🔐 PASSWORD PHOTO VAULT
+# 🔐 PHOTO VAULT
 # ==============================
 if st.session_state.show_password:
     password = st.text_input("Enter Passkey 🔐", type="password")
@@ -193,7 +188,6 @@ if st.session_state.show_password:
         st.image("photos/photo1.jpg")
         st.image("photos/photo2.jpg")
         st.session_state.show_password = False
-
     elif password:
         st.error("Wrong passkey ❌")
 
@@ -203,8 +197,9 @@ if st.session_state.show_password:
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🗑 Clear Chat"):
+    if st.button("🗑 Clear"):
         st.session_state.messages = []
+        st.session_state.knowledge = []
 
 with col2:
     if st.button("💌 Surprise"):
