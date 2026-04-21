@@ -12,7 +12,7 @@ from pydrive2.drive import GoogleDrive
 from google.oauth2.service_account import Credentials
 
 # ==============================
-# CONFIG (IMPORTANT FOR MOBILE)
+# PAGE CONFIG
 # ==============================
 st.set_page_config(
     page_title="LoveBot 💖",
@@ -29,8 +29,12 @@ model, vectorizer, df = pickle.load(open("model.pkl", "rb"))
 # ==============================
 # API KEYS
 # ==============================
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-SERP_KEY = st.secrets["SERPAPI_KEY"]
+try:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    SERP_KEY = st.secrets["SERPAPI_KEY"]
+except:
+    st.error("❌ API keys not set")
+    st.stop()
 
 # ==============================
 # GOOGLE DRIVE
@@ -75,7 +79,7 @@ def save_memory(messages):
         pass
 
 # ==============================
-# SESSION
+# SESSION STATE
 # ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = load_memory()
@@ -88,82 +92,114 @@ if "show_password" not in st.session_state:
 # ==============================
 def google_search(query):
     try:
-        results = GoogleSearch({"q": query, "api_key": SERP_KEY}).get_dict()
+        results = GoogleSearch({
+            "q": query,
+            "api_key": SERP_KEY,
+            "num": 3
+        }).get_dict()
+
         return " ".join(r.get("snippet", "") for r in results.get("organic_results", []))
     except:
         return ""
 
 # ==============================
-# 🧠 BRAIN
+# EMOTION DETECTION
+# ==============================
+def detect_emotion(text):
+    text = text.lower()
+
+    if any(w in text for w in ["sad", "cry", "hurt", "miss"]):
+        return "sad"
+    elif any(w in text for w in ["love", "cute", "sweet"]):
+        return "love"
+    elif any(w in text for w in ["angry", "mad"]):
+        return "angry"
+    elif any(w in text for w in ["why", "how", "what"]):
+        return "curious"
+    else:
+        return "normal"
+
+# ==============================
+# 🧠 HUMAN-LIKE AI
 # ==============================
 def smart_reply(user_input):
     try:
+        emotion = detect_emotion(user_input)
         history = st.session_state.messages[-6:]
         search_info = google_search(user_input)
+
+        system_prompt = f"""
+You are LoveBot 💖, a human-like romantic AI.
+
+User emotion: {emotion}
+
+Rules:
+- Talk like a real human texting
+- Use short, natural sentences
+- Add warmth and emotions
+- Avoid repetition
+- Refer to Rishav as "he"
+
+Behavior:
+- If sad → comfort deeply
+- If love → romantic
+- If curious → explain clearly
+- If normal → casual sweet tone
+"""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a romantic intelligent assistant."},
+                {"role": "system", "content": system_prompt},
                 *history,
-                {"role": "user", "content": f"{user_input}\n{search_info}"}
+                {
+                    "role": "user",
+                    "content": f"{user_input}\n\nExtra info: {search_info}"
+                }
             ],
-            temperature=0.8
+            temperature=0.95
         )
+
         return response.choices[0].message.content
+
     except:
-        return "Rishav still loves you endlessly 💞"
+        return "Hmm… even love needs a second 💭❤️"
 
 # ==============================
-# UI DESIGN (SMOOTH + MOBILE SAFE)
+# UI STYLE
 # ==============================
 st.markdown("""
 <style>
-/* Global */
-body {
-    background-color: #f9fafb;
-}
+body { background:#f8fafc; }
 
-/* Header */
 .header {
     text-align:center;
-    font-size:32px;
-    font-weight:600;
+    font-size:34px;
     color:#ff4d6d;
-    margin-bottom:5px;
+    font-weight:600;
 }
+
 .subheader {
     text-align:center;
     color:#666;
     margin-bottom:20px;
 }
 
-/* Chat container */
-.chat-container {
-    max-width: 800px;
-    margin: auto;
-}
-
-/* Messages */
-.user-msg {
+.user {
     background:#dcf8c6;
-    padding:10px 15px;
+    padding:10px;
     border-radius:18px;
-    margin:6px 0;
-    text-align:right;
+    margin:5px;
+    max-width:70%;
+    margin-left:auto;
 }
 
-.bot-msg {
+.bot {
     background:#ffffff;
-    padding:10px 15px;
+    padding:10px;
     border-radius:18px;
-    margin:6px 0;
-}
-
-/* Input box spacing fix */
-.stChatInput {
-    position: sticky;
-    bottom: 0;
+    margin:5px;
+    max-width:70%;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -174,15 +210,11 @@ st.markdown('<div class="subheader">Hello my Love ❤️</div>', unsafe_allow_ht
 # ==============================
 # CHAT DISPLAY
 # ==============================
-st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-
 for msg in st.session_state.messages:
     if msg["role"] == "user":
-        st.markdown(f'<div class="user-msg">{msg["content"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="user">{msg["content"]}</div>', unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="bot-msg">{msg["content"]}</div>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="bot">{msg["content"]}</div>', unsafe_allow_html=True)
 
 # ==============================
 # INPUT
@@ -196,18 +228,22 @@ if user_input:
 
     st.session_state.messages.append({"role": "user", "content": user_input})
 
+    # Love score
     X = vectorizer.transform([user_input])
     score = int(model.predict(X)[0])
     score = max(0, min(100, score))
-
     st.progress(score / 100)
 
-    if "photo" in user_input.lower():
-        answer = "Rishav wants to show you something special ❤️ Enter passkey 🔐"
+    # Photo trigger
+    if any(word in user_input.lower() for word in ["photo", "memories", "pics"]):
+        answer = "He wants to show you something special ❤️ Enter passkey 🔐"
         st.session_state.show_password = True
+
     else:
+        # Smart priority logic
         matches = df[df["question"].str.lower().str.contains(user_input.lower())]
-        if not matches.empty:
+
+        if len(user_input) < 15 and not matches.empty:
             answer = matches.sample().iloc[0]["answer"]
         else:
             answer = smart_reply(user_input)
@@ -215,13 +251,17 @@ if user_input:
     with st.spinner("LoveBot is thinking... 💭"):
         time.sleep(0.8)
 
+    # Add human touch
+    endings = ["💖", "❤️", "🥺", "✨", "💞", ""]
+    answer = answer + " " + random.choice(endings)
+
     st.session_state.messages.append({"role": "assistant", "content": answer})
     save_memory(st.session_state.messages)
 
     st.rerun()
 
 # ==============================
-# PASSWORD
+# PASSWORD (PHOTO VAULT)
 # ==============================
 if st.session_state.show_password:
     password = st.text_input("Enter Passkey 🔐", type="password")
@@ -235,7 +275,7 @@ if st.session_state.show_password:
         st.error("Wrong passkey ❌")
 
 # ==============================
-# ACTION BUTTONS
+# BUTTONS
 # ==============================
 col1, col2 = st.columns(2)
 
