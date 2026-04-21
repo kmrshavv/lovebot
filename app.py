@@ -68,114 +68,113 @@ print_system_info()
 # ================= CONFIG =================
 st.set_page_config(page_title="LoveBot 💖", layout="centered")
 
-# ================= CLEAN UI =================
 st.markdown("""
 <style>
 
-/* ===== GLOBAL THEME ===== */
-html, body, [class*="css"]  {
-    font-family: 'Segoe UI', sans-serif;
-    background: radial-gradient(circle at top, #1a0f2e, #0a0719 70%);
-    color: #f5eaff;
+/* ===== REMOVE STREAMLIT DEFAULT CLUTTER ===== */
+#MainMenu, footer, header {
+    visibility: hidden;
 }
 
-/* Remove top padding */
+/* Full app background */
+html, body {
+    background: #0d1117;
+}
+
+/* Center chat like ChatGPT */
 .block-container {
+    max-width: 800px;
+    margin: auto;
     padding-top: 20px;
     padding-bottom: 140px;
 }
 
-/* ===== CHAT BUBBLES ===== */
+/* ===== CHAT MESSAGE CONTAINER ===== */
+[data-testid="stChatMessage"] {
+    margin-bottom: 12px;
+}
 
-/* USER MESSAGE */
+/* ===== USER MESSAGE ===== */
 [data-testid="stChatMessage"][data-testid*="user"] {
     display: flex;
     justify-content: flex-end;
 }
 
-[data-testid="stChatMessage"][data-testid*="user"] div {
-    background: linear-gradient(135deg, #ff4da6, #c026d3);
+[data-testid="stChatMessage"][data-testid*="user"] > div {
+    background: #2563eb;
     color: white;
     padding: 12px 16px;
     border-radius: 18px 18px 4px 18px;
-    max-width: 70%;
-    box-shadow: 0 4px 14px rgba(255, 77, 166, 0.4);
+    max-width: 75%;
+    font-size: 15px;
 }
 
-/* BOT MESSAGE */
+/* ===== ASSISTANT MESSAGE ===== */
 [data-testid="stChatMessage"][data-testid*="assistant"] {
     display: flex;
     justify-content: flex-start;
 }
 
-[data-testid="stChatMessage"][data-testid*="assistant"] div {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(10px);
+[data-testid="stChatMessage"][data-testid*="assistant"] > div {
+    background: #161b22;
+    color: #e6edf3;
     padding: 12px 16px;
     border-radius: 18px 18px 18px 4px;
-    max-width: 70%;
-    border: 1px solid rgba(255,255,255,0.08);
+    max-width: 75%;
+    font-size: 15px;
+    border: 1px solid #30363d;
 }
 
 /* ===== AVATARS ===== */
-
-/* USER ICON */
 [data-testid="stChatMessageAvatarUser"] img {
     content: url("https://cdn-icons-png.flaticon.com/512/847/847969.png");
-    width: 34px;
+    width: 32px;
 }
 
-/* BOT ICON */
 [data-testid="stChatMessageAvatarAssistant"] img {
-    content: url("https://cdn-icons-png.flaticon.com/512/742/742751.png");
-    width: 34px;
+    content: url("https://cdn-icons-png.flaticon.com/512/4712/4712109.png");
+    width: 32px;
 }
 
 /* ===== HEADER ===== */
 h2 {
     text-align: center;
     font-weight: 600;
-    font-size: 28px;
-    background: linear-gradient(90deg, #ff4da6, #d946ef);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #e6edf3;
 }
 
-/* ===== BOTTOM INPUT BAR ===== */
+/* ===== BOTTOM INPUT BAR (REAL CHATGPT STYLE) ===== */
 .bottom-bar {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(20, 10, 40, 0.85);
-    backdrop-filter: blur(16px);
+    background: #0d1117;
+    border-top: 1px solid #30363d;
     padding: 12px 16px;
-    border-top: 1px solid rgba(255,255,255,0.1);
     z-index: 999;
 }
 
-/* INPUT FIELD */
+/* Input */
 .stChatInput textarea {
-    background: rgba(255,255,255,0.05) !important;
-    border-radius: 12px !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 14px !important;
     color: white !important;
 }
 
-/* ===== UPLOAD BUTTON ===== */
+/* Upload button */
 div[data-testid="stFileUploader"] button {
-    height: 45px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #ff4da6, #d946ef);
+    height: 42px;
+    border-radius: 10px;
+    background: #21262d;
     color: white;
-    border: none;
-    font-weight: 500;
-    transition: 0.3s;
+    border: 1px solid #30363d;
 }
 
+/* Hover */
 div[data-testid="stFileUploader"] button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 10px #ff4da6;
+    background: #30363d;
 }
 
 /* Hide label */
@@ -183,17 +182,17 @@ div[data-testid="stFileUploader"] > label {
     display: none;
 }
 
-/* ===== BUTTONS ===== */
+/* Clear button */
 .stButton button {
+    height: 42px;
     border-radius: 10px;
-    background: rgba(255,255,255,0.05);
+    background: #21262d;
+    border: 1px solid #30363d;
     color: white;
-    border: 1px solid rgba(255,255,255,0.1);
 }
 
 .stButton button:hover {
-    background: linear-gradient(135deg, #ff4da6, #d946ef);
-    border: none;
+    background: #30363d;
 }
 
 /* ===== SCROLLBAR ===== */
@@ -201,7 +200,7 @@ div[data-testid="stFileUploader"] > label {
     width: 6px;
 }
 ::-webkit-scrollbar-thumb {
-    background: #ff4da6;
+    background: #30363d;
     border-radius: 10px;
 }
 
