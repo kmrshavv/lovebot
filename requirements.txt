@@ -1,14 +1,13 @@
 streamlit
 pandas
 numpy
-pickle5
-serpapi
-google-generativeai
-pypdf
 sentence-transformers
-faiss-cpu
-speechrecognition
+google-generativeai
+serpapi
+pypdf
 google-api-python-client
 google-auth
-google-auth-oauthlib
-tqdm
+speechrecognition
+pydub  # for better audio if needed
+python-dotenv
+joblib  # safer than pickle
