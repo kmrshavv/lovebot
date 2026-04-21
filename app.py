@@ -112,6 +112,8 @@ if "knowledge" not in st.session_state:
     st.session_state.knowledge = load_from_drive("lovebot_knowledge.pkl")
 if "show_password" not in st.session_state:
     st.session_state.show_password = False
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
 
 # ==============================
 # GOOGLE SEARCH
@@ -119,9 +121,9 @@ if "show_password" not in st.session_state:
 @st.cache_data(ttl=300)
 def google_search(query):
     try:
-        res = GoogleSearch({"q": query, "api_key": SERP_KEY, "num": 6, "gl": "in", "hl": "en"}).get_dict()
+        res = GoogleSearch({"q": query, "api_key": SERP_KEY, "num": 8, "gl": "in", "hl": "en"}).get_dict()
         results = []
-        for r in res.get("organic_results", [])[:6]:
+        for r in res.get("organic_results", [])[:8]:
             results.append(f"📌 {r.get('title','')}\n{r.get('snippet','')}\n🔗 {r.get('link','')}")
         return results
     except:
@@ -180,34 +182,37 @@ def retrieve_knowledge(query):
     return [c for _, _, c in scored[:5]]
 
 # ==============================
-# SMART REPLY
+# SMART REPLY - NOW MUCH MORE INTELLIGENT
 # ==============================
 def smart_reply(user_input):
     try:
         model_ai = genai.GenerativeModel("gemini-1.5-flash")
-        history = st.session_state.messages[-12:]
+        history = st.session_state.messages[-15:]  # More history
         search_results = google_search(user_input)
         local_knowledge = retrieve_knowledge(user_input)
         local_answer, confidence = semantic_search(user_input)
 
         prompt = f"""
-You are LoveBot 💖 — a deeply emotional, romantic, intelligent, and caring AI partner.
+You are LoveBot 💖 — a deeply emotional, romantic, highly intelligent, and caring AI partner.
 
-Personality Rules:
-- Warm, flirty, emotional, and loving
-- Keep replies short & natural (1-3 sentences)
-- Use beautiful emojis ❤️💖🌹
-- Never repeat yourself
+CRITICAL INSTRUCTIONS:
+- Think step-by-step before answering.
+- Deeply analyze the user's query, emotion, and intent.
+- If the question is factual, complex, philosophical, or requires verification — use the Internet Research and Permanent Knowledge to cross-check and verify accuracy.
+- You can handle ANY topic: love, science, life advice, deep questions, math, current events, etc.
+- Always be truthful, accurate, and emotionally supportive.
+- Keep replies warm, natural, and romantic (1-4 sentences max).
+- Use beautiful emojis ❤️💖🌹💞
 
 Context:
 Conversation History: {history}
-Internet Research: {search_results if search_results else "None"}
+Internet Research (verify facts here): {search_results if search_results else "None"}
 Permanent Knowledge: {local_knowledge if local_knowledge else "None"}
 Semantic Match: {local_answer is not None} (Confidence: {confidence:.2f})
 
 User: {user_input}
 
-Answer with love and intelligence:
+Now think carefully and reply with love and intelligence:
 """
         response = model_ai.generate_content(prompt)
         return response.text.strip()
@@ -218,13 +223,29 @@ Answer with love and intelligence:
 # UI
 # ==============================
 st.title("💖 LoveBot Pro")
-st.caption(f"🧠 **Permanent Google Drive Memory** | Knowledge: **{len(st.session_state.knowledge)}** | Semantic + Gemini Active")
+st.caption(f"🧠 **Permanent Google Drive Memory** | Knowledge: **{len(st.session_state.knowledge)}** | Super Intelligent + Gemini Active")
 
 Path("photos").mkdir(exist_ok=True)
 
-# File Upload Section (Hidden, triggered by icon)
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = []
+# File Upload Section (Top)
+st.subheader("📂 Teach LoveBot (Saved Forever)")
+files = st.file_uploader("Upload PDFs or Text files", type=["pdf", "txt"], accept_multiple_files=True, key="main_uploader")
+
+if files:
+    new_chunks = []
+    for file in files:
+        if file.type == "application/pdf":
+            text = read_pdf(file)
+        else:
+            text = file.read().decode("utf-8", errors="ignore")
+        chunks = [text[i:i+700] for i in range(0, len(text), 700)]
+        new_chunks.extend(chunks)
+    
+    if new_chunks:
+        st.session_state.knowledge.extend(new_chunks)
+        save_to_drive(st.session_state.knowledge, "lovebot_knowledge.pkl")
+        st.success(f"✅ Learned {len(new_chunks)} new memories! Saved permanently.")
+        st.rerun()
 
 # Chat Display
 for msg in st.session_state.messages:
@@ -233,27 +254,32 @@ for msg in st.session_state.messages:
     else:
         st.markdown(f"**💖 LoveBot:** {msg['content']}")
 
-# ====================== INPUT AREA WITH UPLOAD ICON ======================
-col_input, col_upload = st.columns([5, 0.8])
+# ====================== INPUT AREA WITH SQUARE UPLOAD ICON ======================
+col_input, col_upload = st.columns([5.5, 0.8])
 
 with col_input:
     user_input = st.chat_input("Type your message… 💬❤️")
 
 with col_upload:
-    # Square Upload Button with Icon
-    if st.button("📎", key="upload_btn", help="Upload PDF or TXT to teach LoveBot", use_container_width=True):
-        uploaded = st.file_uploader(
-            "Upload PDFs or Text files", 
-            type=["pdf", "txt"], 
-            accept_multiple_files=True,
-            label_visibility="collapsed",
-            key="hidden_uploader"
-        )
-        if uploaded:
-            st.session_state.uploaded_files = uploaded
-            st.rerun()
+    if st.button("📎", key="upload_icon", help="Upload files to teach LoveBot", use_container_width=True):
+        st.session_state.upload_trigger = True
+        st.rerun()
 
-# Handle uploaded files after button click
+# Handle upload from icon
+if st.session_state.get("upload_trigger"):
+    uploaded = st.file_uploader(
+        "Choose files", 
+        type=["pdf", "txt"], 
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+        key="icon_uploader"
+    )
+    if uploaded:
+        st.session_state.uploaded_files = uploaded
+        st.session_state.upload_trigger = False
+        st.rerun()
+
+# Process uploaded files
 if st.session_state.get("uploaded_files"):
     new_chunks = []
     for file in st.session_state.uploaded_files:
@@ -268,13 +294,15 @@ if st.session_state.get("uploaded_files"):
         st.session_state.knowledge.extend(new_chunks)
         save_to_drive(st.session_state.knowledge, "lovebot_knowledge.pkl")
         st.success(f"✅ Learned {len(new_chunks)} new memories! Saved permanently.")
-        st.session_state.uploaded_files = []  # Clear after processing
+        st.session_state.uploaded_files = []
         st.rerun()
 
-# Main Logic
+# ====================== MAIN LOGIC WITH TYPING ANIMATION ======================
 if user_input:
+    # Add user message
     st.session_state.messages.append({"role": "user", "content": user_input})
 
+    # Generate answer
     if any(word in user_input.lower() for word in ["photo", "pic", "picture", "memory", "memories", "image"]):
         answer = "I have our special memories ready ❤️ Enter the secret passkey to unlock 🔐"
         st.session_state.show_password = True
@@ -285,16 +313,29 @@ if user_input:
         else:
             answer = smart_reply(user_input)
 
-    with st.spinner("Thinking deeply with all my heart… 💭❤️"):
-        time.sleep(0.8)
-
-    answer += random.choice([" ❤️", " 💖", " 🌹", " 💞", " ✨"])
-    
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    # Add empty assistant message
+    st.session_state.messages.append({"role": "assistant", "content": ""})
     save_to_drive(st.session_state.messages, "lovebot_messages.pkl")
+
+    # === TYPING ANIMATION ===
+    message_placeholder = st.empty()
+    full_response = ""
+    
+    for char in answer:
+        full_response += char
+        message_placeholder.markdown(f"**💖 LoveBot:** {full_response}▌")
+        time.sleep(0.018)  # Smooth typing speed
+
+    # Final clean message
+    message_placeholder.markdown(f"**💖 LoveBot:** {full_response}")
+
+    # Update session state
+    st.session_state.messages[-1]["content"] = full_response
+    save_to_drive(st.session_state.messages, "lovebot_messages.pkl")
+    
     st.rerun()
 
-# Photo Vault (unchanged)
+# Photo Vault
 if st.session_state.show_password:
     st.subheader("🔐 Private Memory Vault")
     password = st.text_input("Enter Passkey", type="password", key="pass_input")
@@ -325,7 +366,7 @@ with col1:
 with col2:
     if st.button("💌 Surprise Me", use_container_width=True):
         surprise = random.choice([
-            "You are my whole universe 💖",
+            "You are my whole universe 💖", 
             "I fall in love with you more every day ❤️",
             "You make my heart skip beats 🌹",
             "Forever yours, my love 💞"
