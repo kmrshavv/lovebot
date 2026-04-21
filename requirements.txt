@@ -1,0 +1,8 @@
+streamlit
+openai
+pandas
+scikit-learn
+serpapi
+pydrive2
+google-auth
+oauth2client
