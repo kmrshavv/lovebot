@@ -1,10 +1,8 @@
 import streamlit as st
 import pickle
 import random
-import time
 import os
 import numpy as np
-import re
 
 # ================= SAFE IMPORTS =================
 try:
@@ -19,12 +17,57 @@ except:
 
 from pypdf import PdfReader
 
-# ================= PAGE CONFIG =================
-st.set_page_config(page_title="LoveBot God Mode 💖", layout="centered")
+# ================= CONFIG =================
+st.set_page_config(page_title="LoveBot 💖", layout="centered")
+
+# ================= CLEAN UI =================
+st.markdown("""
+<style>
+html, body, [class*="css"] {
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Remove extra space */
+.block-container {
+    padding-bottom: 120px;
+}
+
+/* Bottom bar */
+.bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #0e1117;
+    padding: 10px 16px;
+    border-top: 1px solid #2a2a2a;
+    z-index: 999;
+}
+
+/* Chat input */
+.stChatInput textarea {
+    background: #1a1d24 !important;
+    border-radius: 10px !important;
+}
+
+/* Upload button */
+div[data-testid="stFileUploader"] button {
+    height: 42px;
+    border-radius: 8px;
+    background-color: #262730;
+    color: white;
+}
+
+/* Hide uploader label */
+div[data-testid="stFileUploader"] > label {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ================= API =================
-GEMINI_KEY = st.secrets.get("GEMINI_API_KEY", None)
-SERP_KEY = st.secrets.get("SERPAPI_KEY", None)
+GEMINI_KEY = st.secrets.get("GEMINI_API_KEY")
+SERP_KEY = st.secrets.get("SERPAPI_KEY")
 VAULT_PASSWORD = st.secrets.get("VAULT_PASSWORD", "Rish")
 
 if genai and GEMINI_KEY:
@@ -48,9 +91,6 @@ if "messages" not in st.session_state:
 if "knowledge" not in st.session_state:
     st.session_state.knowledge = []
 
-if "vault_open" not in st.session_state:
-    st.session_state.vault_open = False
-
 # ================= PDF =================
 def read_pdf(file):
     try:
@@ -59,26 +99,16 @@ def read_pdf(file):
     except:
         return ""
 
-# ================= EMOTION DETECTION =================
+# ================= EMOTION =================
 def detect_emotion(text):
     text = text.lower()
-
-    emotions = {
-        "love": ["love", "miss you", "hug", "kiss", "forever"],
-        "sad": ["sad", "cry", "hurt", "alone", "miss"],
-        "happy": ["happy", "excited", "great", "amazing"],
-        "angry": ["angry", "hate", "annoyed", "frustrated"],
-        "flirty": ["baby", "jaan", "cutie", "hot", "date"]
-    }
-
-    scores = {k: 0 for k in emotions}
-
-    for emotion, words in emotions.items():
-        for w in words:
-            if w in text:
-                scores[emotion] += 1
-
-    return max(scores, key=scores.get)
+    if any(w in text for w in ["sad", "cry", "alone"]):
+        return "sad"
+    if any(w in text for w in ["love", "miss"]):
+        return "love"
+    if any(w in text for w in ["angry", "hate"]):
+        return "angry"
+    return "neutral"
 
 # ================= SEMANTIC SEARCH =================
 def semantic_search(query, top_k=3):
@@ -96,26 +126,9 @@ def semantic_search(query, top_k=3):
             np.linalg.norm(embeddings, axis=1) * np.linalg.norm(q_vec)
         )
 
-        top_idx = np.argsort(sims)[-top_k:][::-1]
+        idx = np.argsort(sims)[-top_k:][::-1]
+        return df.iloc[idx]["answer"].tolist()
 
-        return df.iloc[top_idx]["answer"].tolist()
-
-    except:
-        return []
-
-# ================= GOOGLE =================
-def google_search(query):
-    if not GoogleSearch or not SERP_KEY:
-        return []
-
-    try:
-        res = GoogleSearch({
-            "q": query,
-            "api_key": SERP_KEY,
-            "num": 3
-        }).get_dict()
-
-        return [r.get("snippet", "") for r in res.get("organic_results", [])[:3]]
     except:
         return []
 
@@ -128,151 +141,95 @@ def stream_reply(prompt):
         for chunk in response:
             if hasattr(chunk, "text"):
                 yield chunk.text
-
     except:
         fallback = "I'm here for you ❤️"
         for c in fallback:
             yield c
 
-# ================= MAIN AI =================
+# ================= AI =================
 def generate_reply(user_input):
-
     emotion = detect_emotion(user_input)
-
-    semantic_context = semantic_search(user_input)
-    memory_context = st.session_state.knowledge[-5:]
-    web_context = google_search(user_input)
+    semantic = semantic_search(user_input)
+    memory = st.session_state.knowledge[-5:]
 
     prompt = f"""
-You are LoveBot 💖 — emotionally intelligent AI.
+You are LoveBot 💖
 
-Detected Emotion: {emotion}
+Emotion: {emotion}
+User: {user_input}
+Knowledge: {semantic}
+Memory: {memory}
 
-User:
-{user_input}
-
-Relevant Knowledge:
-{semantic_context}
-
-Memory:
-{memory_context}
-
-Internet:
-{web_context}
-
-Rules:
-- Adapt tone based on emotion
-- If sad → comforting
-- If love → romantic
-- If angry → calm and supportive
-- If flirty → playful
-
-Reply in 2–4 lines.
+Reply naturally in 2-3 lines.
 """
 
     return stream_reply(prompt)
 
-# ================= UI =================
-st.markdown("<h1 style='text-align:center;'>💖 LoveBot GOD+</h1>", unsafe_allow_html=True)
+# ================= HEADER =================
+st.markdown("<h2 style='text-align:center;'>💖 LoveBot</h2>", unsafe_allow_html=True)
 
 # ================= CHAT =================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# ================= INPUT =================
-col1, col2 = st.columns([6, 1])
+# ================= BOTTOM BAR =================
+st.markdown('<div class="bottom-bar">', unsafe_allow_html=True)
+
+col1, col2 = st.columns([6,1])
 
 with col1:
-    user_input = st.chat_input("Type your message... 💌")
+    user_input = st.chat_input("Type your message... 💬")
 
 with col2:
     uploaded_files = st.file_uploader(
         "📎",
-        type=["pdf", "txt"],
+        type=["pdf","txt"],
         accept_multiple_files=True,
         label_visibility="collapsed"
     )
 
+st.markdown('</div>', unsafe_allow_html=True)
+
 # ================= UPLOAD =================
 if uploaded_files:
     chunks = []
-
     for file in uploaded_files:
-        if file.type == "application/pdf":
-            text = read_pdf(file)
-        else:
-            text = file.read().decode("utf-8", errors="ignore")
-
-        chunks.extend([text[i:i+500] for i in range(0, len(text), 500)])
+        text = read_pdf(file) if file.type == "application/pdf" else file.read().decode("utf-8","ignore")
+        chunks.extend([text[i:i+500] for i in range(0,len(text),500)])
 
     st.session_state.knowledge = (st.session_state.knowledge + chunks)[-50:]
-    st.success("Learned successfully!")
+    st.toast("Learned from files ✅")
 
-# ================= CHAT FLOW =================
+# ================= CHAT LOGIC =================
 if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.session_state.messages.append({"role":"user","content":user_input})
 
-    if any(w in user_input.lower() for w in ["photo", "image", "memory"]):
-        reply = "🔐 Private memory. Enter passkey 💖"
-        st.session_state.vault_open = True
+    with st.chat_message("assistant"):
+        placeholder = st.empty()
+        full = ""
 
-        with st.chat_message("assistant"):
-            st.write(reply)
+        for chunk in generate_reply(user_input):
+            full += chunk
+            placeholder.markdown(full + "▌")
 
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+        placeholder.markdown(full)
 
-    else:
-        with st.chat_message("assistant"):
-            placeholder = st.empty()
-            full_text = ""
+    st.session_state.messages.append({"role":"assistant","content":full})
 
-            for chunk in generate_reply(user_input):
-                full_text += chunk
-                placeholder.markdown(full_text + "▌")
-
-            placeholder.markdown(full_text)
-
-        st.session_state.messages.append({"role": "assistant", "content": full_text})
-
-# ================= VAULT =================
-if st.session_state.vault_open:
-    st.subheader("🔐 Private Vault")
-
-    pwd = st.text_input("Enter Passkey", type="password")
-
-    if pwd == VAULT_PASSWORD:
-        st.success("Access Granted ❤️")
-
-        if os.path.exists("photos"):
-            imgs = os.listdir("photos")
-            cols = st.columns(2)
-
-            for i, img in enumerate(imgs):
-                path = os.path.join("photos", img)
-                if os.path.isfile(path):
-                    with cols[i % 2]:
-                        st.image(path, use_column_width=True)
-
-        st.session_state.vault_open = False
-
-    elif pwd:
-        st.error("Wrong passkey ❌")
-
-# ================= ACTION =================
+# ================= ACTIONS =================
 colA, colB = st.columns(2)
 
 with colA:
-    if st.button("🗑 Clear Chat"):
+    if st.button("Clear Chat"):
         st.session_state.messages = []
         st.session_state.knowledge = []
         st.rerun()
 
 with colB:
-    if st.button("💌 Surprise"):
+    if st.button("Surprise"):
         st.success(random.choice([
-            "You’re everything to me 💖",
-            "I’m always with you ❤️",
-            "You make my world better 🌹"
+            "You mean everything 💖",
+            "I'm always here ❤️",
+            "You make me smile 🌹"
         ]))
-        st.balloons()
