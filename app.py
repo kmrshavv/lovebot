@@ -1,19 +1,15 @@
 import streamlit as st
-import pickle
-import random
-import time
+import pickle, random, time
 import json
-import openai
+
+from openai import OpenAI
 import google.generativeai as genai
 from serpapi import GoogleSearch
 
-# Google Drive
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
-from google.oauth2.service_account import Credentials
+from pypdf import PdfReader
 
 # ==============================
-# PAGE CONFIG
+# CONFIG
 # ==============================
 st.set_page_config(page_title="LoveBot 💖", layout="wide")
 
@@ -26,7 +22,7 @@ model, vectorizer, df = pickle.load(open("model.pkl", "rb"))
 # API KEYS
 # ==============================
 try:
-    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     SERP_KEY = st.secrets["SERPAPI_KEY"]
 except Exception as e:
@@ -34,52 +30,13 @@ except Exception as e:
     st.stop()
 
 # ==============================
-# GOOGLE DRIVE
-# ==============================
-def init_drive():
-    try:
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=["https://www.googleapis.com/auth/drive"]
-        )
-        gauth = GoogleAuth()
-        gauth.credentials = creds
-        return GoogleDrive(gauth)
-    except:
-        return None
-
-drive = init_drive()
-
-# ==============================
-# MEMORY
-# ==============================
-def load_memory():
-    if not drive:
-        return []
-    try:
-        files = drive.ListFile({'q': "title='love_memory.json'"}).GetList()
-        if files:
-            return json.loads(files[0].GetContentString())
-    except:
-        pass
-    return []
-
-def save_memory(messages):
-    if not drive:
-        return
-    try:
-        files = drive.ListFile({'q': "title='love_memory.json'"}).GetList()
-        file = files[0] if files else drive.CreateFile({'title': 'love_memory.json'})
-        file.SetContentString(json.dumps(messages))
-        file.Upload()
-    except:
-        pass
-
-# ==============================
-# SESSION
+# SESSION STATE
 # ==============================
 if "messages" not in st.session_state:
-    st.session_state.messages = load_memory()
+    st.session_state.messages = []
+
+if "knowledge" not in st.session_state:
+    st.session_state.knowledge = ""
 
 if "show_password" not in st.session_state:
     st.session_state.show_password = False
@@ -87,102 +44,109 @@ if "show_password" not in st.session_state:
 # ==============================
 # GOOGLE SEARCH
 # ==============================
-def google_search(query):
+def google_search(q):
     try:
-        results = GoogleSearch({
-            "q": query,
+        res = GoogleSearch({
+            "q": q,
             "api_key": SERP_KEY,
             "num": 3
         }).get_dict()
 
-        return " ".join(r.get("snippet", "") for r in results.get("organic_results", []))
+        return " ".join(r.get("snippet","") for r in res.get("organic_results", []))
     except:
         return ""
 
 # ==============================
-# EMOTION
+# FILE LEARNING
 # ==============================
-def detect_emotion(text):
-    text = text.lower()
-
-    if any(w in text for w in ["sad", "hurt", "miss"]):
-        return "sad"
-    elif "love" in text:
-        return "love"
-    elif any(w in text for w in ["why", "how", "what"]):
-        return "curious"
-    return "normal"
+def read_pdf(file):
+    text = ""
+    pdf = PdfReader(file)
+    for page in pdf.pages:
+        text += page.extract_text() or ""
+    return text
 
 # ==============================
 # GEMINI BACKUP
 # ==============================
-def gemini_reply(user_input):
+def gemini_reply(prompt):
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
-        res = model.generate_content(user_input)
+        res = model.generate_content(prompt)
         return res.text
-    except Exception as e:
-        print("Gemini error:", e)
+    except:
         return None
 
 # ==============================
-# 🧠 MAIN BRAIN
+# MAIN AI
 # ==============================
 def smart_reply(user_input):
     try:
-        emotion = detect_emotion(user_input)
         history = st.session_state.messages[-6:]
-        search_info = google_search(user_input)
+        search = google_search(user_input)
+        knowledge = st.session_state.knowledge[:3000]
 
-        system_prompt = f"""
-You are LoveBot 💖 (human-like AI)
+        system = f"""
+You are LoveBot 💖
 
-Emotion: {emotion}
+Talk like a real human:
+- short replies
+- emotional
+- no repetition
 
-Rules:
-- Talk like a real human
-- Keep replies short & emotional
-- Avoid repeating lines
-- Refer to Rishav as "he"
+Use knowledge if helpful:
+{knowledge}
 """
 
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": system},
                 *history,
-                {"role": "user", "content": f"{user_input}\n{search_info}"}
+                {"role": "user", "content": f"{user_input}\n{search}"}
             ],
-            temperature=0.9
+            temperature=0.8
         )
 
-        return response["choices"][0]["message"]["content"]
+        return response.choices[0].message.content
 
     except Exception as e:
-        print("OpenAI failed:", e)
-
-        # 🔥 fallback Gemini
-        gemini_ans = gemini_reply(user_input)
-
-        if gemini_ans:
-            return gemini_ans
-
-        return "Something went wrong 💔"
+        st.warning("⚠️ OpenAI failed, switching to backup")
+        gem = gemini_reply(user_input)
+        if gem:
+            return gem
+        return "I'm thinking… something feels off 💭"
 
 # ==============================
 # UI
 # ==============================
-st.markdown("## 💖 LoveBot")
-st.markdown("Hello my Love ❤️")
+st.title("💖 LoveBot")
+st.caption("Hello my Love ❤️")
+
+# ==============================
+# FILE UPLOAD (LEARNING)
+# ==============================
+st.subheader("📂 Teach LoveBot")
+
+uploaded = st.file_uploader("Upload PDF / Text", type=["pdf","txt"])
+
+if uploaded:
+    if uploaded.type == "application/pdf":
+        text = read_pdf(uploaded)
+    else:
+        text = uploaded.read().decode("utf-8")
+
+    st.session_state.knowledge += "\n" + text
+    st.success("Learned from your file 💡")
 
 # ==============================
 # CHAT DISPLAY
 # ==============================
 for msg in st.session_state.messages:
     if msg["role"] == "user":
-        st.markdown(f"🟢 **You:** {msg['content']}")
+        st.markdown(f"🟢 {msg['content']}")
     else:
-        st.markdown(f"🤖 **LoveBot:** {msg['content']}")
+        st.markdown(f"🤖 {msg['content']}")
 
 # ==============================
 # INPUT
@@ -194,39 +158,32 @@ user_input = st.chat_input("Type your message 💬")
 # ==============================
 if user_input:
 
-    st.session_state.messages.append({"role": "user", "content": user_input})
-
-    # Love score
-    X = vectorizer.transform([user_input])
-    score = int(model.predict(X)[0])
-    score = max(0, min(100, score))
-    st.progress(score / 100)
+    st.session_state.messages.append({"role":"user","content":user_input})
 
     # Photo trigger
-    if any(w in user_input.lower() for w in ["photo", "pics"]):
-        answer = "He wants to show you something special ❤️ Enter passkey 🔐"
+    if any(w in user_input.lower() for w in ["photo","memory","pics"]):
+        answer = "I have something special ❤️ Enter passkey 🔐"
         st.session_state.show_password = True
 
     else:
         matches = df[df["question"].str.lower().str.contains(user_input.lower())]
 
-        if len(user_input) < 15 and not matches.empty:
+        if len(user_input) < 12 and not matches.empty:
             answer = matches.sample().iloc[0]["answer"]
         else:
             answer = smart_reply(user_input)
 
     with st.spinner("Thinking 💭"):
-        time.sleep(0.8)
+        time.sleep(0.6)
 
-    answer += random.choice([" 💖", " ❤️", " 🥺", ""])
+    answer += random.choice([" ❤️"," 💖"," 🥺",""])
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
-    save_memory(st.session_state.messages)
+    st.session_state.messages.append({"role":"assistant","content":answer})
 
     st.rerun()
 
 # ==============================
-# PASSWORD
+# 🔐 PASSWORD PHOTO VAULT
 # ==============================
 if st.session_state.show_password:
     password = st.text_input("Enter Passkey 🔐", type="password")
@@ -236,6 +193,7 @@ if st.session_state.show_password:
         st.image("photos/photo1.jpg")
         st.image("photos/photo2.jpg")
         st.session_state.show_password = False
+
     elif password:
         st.error("Wrong passkey ❌")
 
@@ -247,7 +205,6 @@ col1, col2 = st.columns(2)
 with col1:
     if st.button("🗑 Clear Chat"):
         st.session_state.messages = []
-        save_memory([])
 
 with col2:
     if st.button("💌 Surprise"):
