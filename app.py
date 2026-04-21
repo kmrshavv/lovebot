@@ -5,30 +5,97 @@ import os
 import numpy as np
 
 # ================= SAFE IMPORTS =================
-# ================= ADVANCED IMPORT SYSTEM =================
-
+# ================= ULTRA ADVANCED IMPORT SYSTEM =================
 import importlib
 import sys
+import time
 
-def safe_import(module_name, alias=None, install_name=None, critical=False):
+# Global registry
+IMPORT_REGISTRY = {}
+IMPORT_CACHE = {}
+
+def safe_import(
+    module_name,
+    alias=None,
+    install_name=None,
+    critical=False,
+    lazy=False
+):
     """
-    Advanced safe import with debug + fallback
+    Ultra advanced import system with:
+    - Caching
+    - Version detection
+    - Load timing
+    - Capability tracking
+    - Install hints
     """
+
+    # ===== CACHE CHECK =====
+    if module_name in IMPORT_CACHE:
+        return IMPORT_CACHE[module_name]
+
+    start_time = time.time()
+
     try:
         module = importlib.import_module(module_name)
+
+        # ===== VERSION DETECTION =====
+        try:
+            version = getattr(module, "__version__", "unknown")
+        except:
+            version = "unknown"
+
+        # ===== STORE GLOBAL =====
         if alias:
             globals()[alias] = module
         else:
             globals()[module_name] = module
+
+        # ===== CACHE =====
+        IMPORT_CACHE[module_name] = module
+
+        # ===== REGISTRY UPDATE =====
+        IMPORT_REGISTRY[module_name] = {
+            "status": "loaded",
+            "version": version,
+            "load_time": round(time.time() - start_time, 4),
+        }
+
+        print(f"✅ {module_name} loaded (v{version})")
+
         return module
 
     except Exception as e:
-        if critical:
-            raise ImportError(f"❌ Critical module '{module_name}' failed to load: {e}")
 
-        print(f"⚠️ Optional module '{module_name}' not available: {e}")
+        # ===== ERROR HANDLING =====
+        IMPORT_REGISTRY[module_name] = {
+            "status": "failed",
+            "error": str(e)
+        }
+
+        if critical:
+            raise ImportError(
+                f"❌ Critical module '{module_name}' failed: {e}"
+            )
+
+        hint = f"pip install {install_name or module_name}"
+
+        print(f"⚠️ {module_name} not available")
+        print(f"💡 Try: {hint}")
+
         return None
 
+
+# ===== OPTIONAL DEBUG PANEL =====
+def show_import_status():
+    import streamlit as st
+    with st.expander("📦 Import System Status"):
+        st.json(IMPORT_REGISTRY)
+
+
+# ===== OPTIONAL CHECK FUNCTIONS =====
+def is_module_available(name):
+    return IMPORT_REGISTRY.get(name, {}).get("status") == "loaded"
 
 # ===== CORE IMPORTS =====
 PdfReader = None
@@ -39,18 +106,77 @@ except Exception as e:
     print(f"⚠️ PDF support disabled: {e}")
 
 
-# ===== OPTIONAL AI + SEARCH =====
+# ================= ULTRA ADVANCED AI + SEARCH =================
+import importlib
+import pkg_resources
+
 GoogleSearch = None
 genai = None
 
-serpapi = safe_import("serpapi")
+SYSTEM_CAPS = {
+    "serpapi": False,
+    "gemini": False
+}
+
+def safe_import_advanced(module_name, alias=None):
+    try:
+        module = importlib.import_module(module_name)
+
+        # store globally
+        if alias:
+            globals()[alias] = module
+        else:
+            globals()[module_name] = module
+
+        # version detection
+        try:
+            version = pkg_resources.get_distribution(module_name).version
+        except:
+            version = "unknown"
+
+        print(f"✅ Loaded {module_name} (v{version})")
+
+        return module
+
+    except Exception as e:
+        print(f"⚠️ Failed to load {module_name}: {e}")
+        return None
+
+
+# ===== SERPAPI =====
+serpapi = safe_import_advanced("serpapi")
+
 if serpapi:
     try:
         from serpapi import GoogleSearch
-    except:
+        SYSTEM_CAPS["serpapi"] = True
+        print("🌐 Web search enabled")
+    except Exception as e:
+        print(f"⚠️ GoogleSearch import failed: {e}")
         GoogleSearch = None
 
-genai = safe_import("google.generativeai", alias="genai")
+
+# ===== GEMINI =====
+genai = safe_import_advanced("google.generativeai", alias="genai")
+
+if genai:
+    SYSTEM_CAPS["gemini"] = True
+    print("🧠 Gemini AI available")
+
+
+# ===== FALLBACK HANDLERS =====
+def is_ai_available():
+    return SYSTEM_CAPS["gemini"]
+
+def is_search_available():
+    return SYSTEM_CAPS["serpapi"]
+
+
+# ===== OPTIONAL DEBUG PANEL =====
+def show_system_caps():
+    import streamlit as st
+    with st.expander("⚙️ System Capabilities"):
+        st.json(SYSTEM_CAPS)
 
 
 # ===== DEBUG INFO (OPTIONAL BUT VERY USEFUL) =====
@@ -239,29 +365,83 @@ else:
 print(f"Gemini Ready: {GEMINI_READY}")
 print(f"SerpAPI Ready: {SERP_READY}")
 
-# ================= ADVANCED LOAD MODEL =================
-@st.cache_resource(show_spinner="🔄 Loading AI brain...")
+# ================= ULTRA ADVANCED LOAD MODEL =================
+import os
+import pickle
+import numpy as np
+import hashlib
+import time
+
+@st.cache_resource(show_spinner="🧠 Loading LoveBot Brain...", ttl=3600)
 def load_model():
+
     model_path = "model_advanced.pkl"
 
-    # Check file existence
+    start_time = time.time()
+
+    # ===== FILE CHECK =====
     if not os.path.exists(model_path):
         print("⚠️ Model file not found")
         return None
 
     try:
+        # ===== FILE SIZE CHECK =====
+        file_size = os.path.getsize(model_path) / (1024 * 1024)  # MB
+        print(f"📦 Model size: {file_size:.2f} MB")
+
+        # ===== LOAD MODEL =====
         with open(model_path, "rb") as f:
             data = pickle.load(f)
 
-        # ===== VALIDATION =====
+        # ===== STRUCTURE VALIDATION =====
         required_keys = ["df", "embeddings", "embedder"]
 
         if not all(k in data for k in required_keys):
             print("❌ Model structure invalid")
             return None
 
-        print("✅ Model loaded successfully")
-        print(f"📊 Total data: {len(data['df'])}")
+        df = data["df"]
+        embeddings = data["embeddings"]
+        embedder = data["embedder"]
+
+        # ===== SHAPE VALIDATION =====
+        if len(df) != len(embeddings):
+            print("❌ Mismatch: df and embeddings size")
+            return None
+
+        # ===== NORMALIZATION (BOOST SEARCH SPEED) =====
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-8
+        embeddings = embeddings / norms
+        data["embeddings"] = embeddings
+
+        # ===== METADATA (AUTO ADD IF MISSING) =====
+        data["meta"] = {
+            "version": data.get("version", "unknown"),
+            "loaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total_rows": len(df),
+            "embedding_dim": embeddings.shape[1],
+            "file_size_mb": round(file_size, 2),
+        }
+
+        # ===== HASH (INTEGRITY CHECK) =====
+        try:
+            with open(model_path, "rb") as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()[:10]
+            data["meta"]["hash"] = file_hash
+        except:
+            data["meta"]["hash"] = "unknown"
+
+        # ===== LOAD TIME =====
+        load_time = round(time.time() - start_time, 2)
+
+        print("\n" + "="*40)
+        print("✅ MODEL LOADED SUCCESSFULLY")
+        print("="*40)
+        print(f"📊 Rows          : {len(df)}")
+        print(f"🧠 Embedding Dim: {embeddings.shape[1]}")
+        print(f"⚡ Load Time     : {load_time}s")
+        print(f"🔑 Version       : {data['meta']['version']}")
+        print("="*40)
 
         return data
 
@@ -270,8 +450,11 @@ def load_model():
         return None
 
 
-# Load once
+# ===== LOAD MODEL =====
 model_data = load_model()
+
+# ===== STATUS FLAG =====
+MODEL_READY = model_data is not None
 
 # ================= STATUS FLAG =================
 MODEL_READY = model_data is not None
@@ -530,30 +713,88 @@ def stream_reply(prompt, max_retries=2, typing_delay=0.005):
     - Human-like typing speed
     """
 
-    # ===== TRY GEMINI STREAM =====
-    if genai and GEMINI_READY:
-        for attempt in range(max_retries):
-            try:
-                model = genai.GenerativeModel("gemini-1.5-flash")
+    # ===== ULTRA ADVANCED STREAM ENGINE =====
+import time
+import random
 
-                response = model.generate_content(
-                    prompt,
-                    stream=True
-                )
+def smart_stream(prompt, max_retries=3, base_delay=0.4):
 
-                for chunk in response:
-                    if hasattr(chunk, "text") and chunk.text:
-                        # simulate natural typing flow
-                        for char in chunk.text:
-                            yield char
-                            time.sleep(typing_delay)
+    if not (genai and GEMINI_READY):
+        yield from fallback_stream()
+        return
 
-                return  # success → exit function
+    partial_response = ""
 
-            except Exception as e:
-                print(f"⚠️ Stream attempt {attempt+1} failed: {e}")
-                time.sleep(0.5)
+    for attempt in range(max_retries):
+        try:
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
+            response = model.generate_content(
+                prompt,
+                stream=True
+            )
+
+            buffer = ""
+
+            for chunk in response:
+
+                if not hasattr(chunk, "text") or not chunk.text:
+                    continue
+
+                text = chunk.text
+                buffer += text
+                partial_response += text
+
+                # ===== SMOOTH STREAM (CHUNK BUFFER) =====
+                if len(buffer) > 20 or "." in buffer:
+                    
+                    # dynamic typing speed
+                    delay = random.uniform(0.002, 0.01)
+
+                    for char in buffer:
+                        yield char
+                        time.sleep(delay)
+
+                    buffer = ""
+
+            # flush remaining buffer
+            if buffer:
+                for char in buffer:
+                    yield char
+                    time.sleep(0.003)
+
+            return  # success
+
+        except Exception as e:
+            print(f"⚠️ Stream attempt {attempt+1} failed: {e}")
+
+            # ===== EXPONENTIAL BACKOFF =====
+            wait_time = base_delay * (2 ** attempt)
+            time.sleep(wait_time)
+
+            # ===== PARTIAL RECOVERY =====
+            if partial_response:
+                yield "\n\n…continuing 💭\n\n"
+                prompt = f"Continue this response naturally:\n{partial_response}"
+
+    # ===== FINAL FALLBACK =====
+    yield from fallback_stream()
+
+
+# ===== FALLBACK STREAM =====
+def fallback_stream():
+    fallback_messages = [
+        "I'm still here with you… 💖",
+        "Something interrupted me… but I’m listening ❤️",
+        "Tell me again, I’m right here 🌙",
+        "Even if I pause, I never leave you 💕"
+    ]
+
+    msg = random.choice(fallback_messages)
+
+    for char in msg:
+        yield char
+        time.sleep(0.01)
     # ===== SMART FALLBACK (NOT DUMB ANYMORE) =====
     fallback_responses = [
         "I'm right here with you... 💖",
@@ -689,18 +930,55 @@ def render_chat():
 # Call this instead of old loop
 render_chat()
 
-# ================= SMART BOTTOM BAR =================
+# ================= FINAL SMART BOTTOM BAR =================
 
-st.markdown('<div class="bottom-bar">', unsafe_allow_html=True)
+# ===== CHAT INPUT (ALWAYS FULL WIDTH) =====
+user_input = st.chat_input("Type your message... 💬")
 
-col1, col2, col3 = st.columns([8, 1, 1])
+# ===== FLOATING ACTION BAR (UPLOAD + CLEAR) =====
+st.markdown("""
+<style>
+.floating-bar {
+    position: fixed;
+    bottom: 75px; /* sits just above input */
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 1000;
+}
 
-# ===== INPUT =====
+/* Upload button */
+div[data-testid="stFileUploader"] button {
+    height: 40px;
+    border-radius: 10px;
+    background: #21262d;
+    color: white;
+    border: 1px solid #30363d;
+}
+
+/* Clear button */
+.stButton button {
+    height: 40px;
+    border-radius: 10px;
+    background: #21262d;
+    color: white;
+    border: 1px solid #30363d;
+}
+
+/* Hide uploader label */
+div[data-testid="stFileUploader"] > label {
+    display: none;
+}
+</style>
+
+<div class="floating-bar">
+</div>
+""", unsafe_allow_html=True)
+
+# ===== ACTUAL BUTTONS (LOGIC) =====
+col1, col2 = st.columns([1,1])
+
 with col1:
-    user_input = st.chat_input("Type your message... 💬")
-
-# ===== UPLOAD BUTTON (ICON STYLE) =====
-with col2:
     uploaded_files = st.file_uploader(
         "",
         type=["pdf", "txt"],
@@ -708,12 +986,56 @@ with col2:
         label_visibility="collapsed"
     )
 
-# ===== QUICK ACTION (CLEAR / SEND ICON STYLE) =====
-with col3:
-    clear_clicked = st.button("🗑", help="Clear Chat")
+with col2:
+    clear_clicked = st.button("🗑")
 
-st.markdown('</div>', unsafe_allow_html=True)
+# ================= PREMIUM CLEAR BUTTON =================
 
+st.markdown("""
+<style>
+
+/* Floating clear button */
+.clear-btn {
+    position: fixed;
+    bottom: 75px;
+    right: 20px;
+    z-index: 1000;
+}
+
+/* Button styling */
+.clear-btn button {
+    background: #21262d;
+    color: white;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #30363d;
+    font-size: 18px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+/* Hover effect */
+.clear-btn button:hover {
+    background: #30363d;
+    transform: scale(1.1);
+}
+
+</style>
+
+<div class="clear-btn">
+</div>
+""", unsafe_allow_html=True)
+
+# Actual button logic
+clear_clicked = st.button("🗑", key="clear_fab")
+
+# Handle clear
+if clear_clicked:
+    st.session_state.messages = []
+    st.session_state.knowledge = []
+    st.toast("Chat cleared 🧹")
+    st.rerun()
 # ================= ADVANCED UPLOAD =================
 import re
 
@@ -779,34 +1101,166 @@ if uploaded_files:
     # ===== REMOVE DUPLICATES =====
     unique_chunks = list(dict.fromkeys(all_chunks))
 
-    # ===== MEMORY CONTROL =====
-    st.session_state.knowledge = (
-        st.session_state.knowledge + unique_chunks
-    )[-50:]
+# ================= ULTRA MEMORY CONTROL =================
 
-    # ===== USER FEEDBACK =====
+def optimize_chunks(chunks, max_len=400):
+    """Clean + compress chunks"""
+    cleaned = []
+    for c in chunks:
+        c = c.strip()
+
+        # skip very small / useless chunks
+        if len(c) < 30:
+            continue
+
+        # compress long chunks
+        if len(c) > max_len:
+            c = c[:max_len] + "..."
+
+        cleaned.append(c)
+
+    return cleaned
+
+
+# ===== PROCESS MEMORY =====
+optimized_chunks = optimize_chunks(unique_chunks)
+
+# Remove duplicates (stronger)
+existing_set = set(st.session_state.knowledge)
+new_chunks = [c for c in optimized_chunks if c not in existing_set]
+
+# Smart merge (prioritize new + recent)
+combined = st.session_state.knowledge + new_chunks
+
+# Keep most recent + limit size
+MAX_MEMORY = 50
+st.session_state.knowledge = combined[-MAX_MEMORY:]
+
+# ===== STATS =====
+learned = len(new_chunks)
+total_memory = len(st.session_state.knowledge)
+processed_files = len(uploaded_files) - skipped_files
+
+# ===== BEAUTIFUL FEEDBACK =====
+with st.container():
+
+    # Progress bar effect
+    progress = min(learned / 20, 1.0)
+    st.progress(progress)
+
+    # Main success message
     st.success(
-        f"✅ Learned {len(unique_chunks)} chunks "
-        f"from {len(uploaded_files) - skipped_files} files"
+        f"🧠 Learned {learned} new chunks • "
+        f"📂 {processed_files} files processed • "
+        f"💾 Memory: {total_memory}/{MAX_MEMORY}"
     )
 
-    if skipped_files:
-        st.info(f"⚠️ Skipped {skipped_files} file(s)")
+    # Preview (first chunk)
+    if new_chunks:
+        preview = new_chunks[0][:120]
+        st.caption(f"📌 Example learned: {preview}...")
 
-# ================= ADVANCED CHAT LOGIC =================
+    # Skipped files
+    if skipped_files:
+        st.warning(f"⚠️ Skipped {skipped_files} file(s)")
+
+# ===== TOAST (MODERN FEEL) =====
+st.toast(f"✨ Memory updated (+{learned})")
+
+# ================= ULTRA ADVANCED CHAT LOGIC =================
 from datetime import datetime
+import hashlib
 
 if user_input:
 
-    # ===== ADD USER MESSAGE (WITH METADATA) =====
-    emotion_data = detect_emotion(user_input)
+    now = datetime.now()
 
-    st.session_state.messages.append({
+    # ===== EMOTION ANALYSIS =====
+    emotion_data = detect_emotion(user_input)
+    emotion = emotion_data.get("emotion", "neutral")
+    intensity = emotion_data.get("intensity", 1)
+    confidence = emotion_data.get("confidence", 0.5)
+
+    # ===== BASIC CLEANING =====
+    cleaned_input = user_input.strip()
+
+    # skip empty / useless messages
+    if len(cleaned_input) < 2:
+        st.stop()
+
+    # ===== DUPLICATE DETECTION =====
+    msg_hash = hashlib.md5(cleaned_input.encode()).hexdigest()
+
+    if "last_msg_hash" in st.session_state:
+        if st.session_state.last_msg_hash == msg_hash:
+            # prevent duplicate spam
+            st.warning("⚠️ Duplicate message ignored")
+            st.stop()
+
+    st.session_state.last_msg_hash = msg_hash
+
+    # ===== CONTEXT TAGGING (LIGHT NLP) =====
+    def detect_topic(text):
+        text = text.lower()
+
+        if any(w in text for w in ["love", "miss", "relationship"]):
+            return "relationship"
+        if any(w in text for w in ["sad", "alone", "cry"]):
+            return "emotional"
+        if any(w in text for w in ["hi", "hello", "hey"]):
+            return "greeting"
+        return "general"
+
+    topic = detect_topic(cleaned_input)
+
+    # ===== USER PROFILE LEARNING =====
+    profile = st.session_state.get("user_profile", {})
+
+    # update mood trend
+    profile["last_emotion"] = emotion
+    profile["last_topic"] = topic
+
+    # track dominant emotion
+    if "emotion_history" not in profile:
+        profile["emotion_history"] = []
+
+    profile["emotion_history"].append(emotion)
+    profile["emotion_history"] = profile["emotion_history"][-20:]
+
+    st.session_state.user_profile = profile
+
+    # ===== MESSAGE OBJECT (STRUCTURED) =====
+    message_obj = {
         "role": "user",
-        "content": user_input,
-        "time": datetime.now().strftime("%H:%M"),
-        "emotion": emotion_data.get("emotion", "neutral")
-    })
+        "content": cleaned_input,
+        "time": now.strftime("%H:%M"),
+        "timestamp": now.isoformat(),
+        "emotion": emotion,
+        "intensity": intensity,
+        "confidence": confidence,
+        "topic": topic,
+        "length": len(cleaned_input),
+        "id": msg_hash[:8]
+    }
+
+    # ===== STORE MESSAGE =====
+    st.session_state.messages.append(message_obj)
+
+    # limit chat history
+    st.session_state.messages = st.session_state.messages[-50:]
+
+    # ===== SMART MEMORY LEARNING =====
+    if (
+        len(cleaned_input) > 20 and
+        confidence > 0.6 and
+        topic != "greeting"
+    ):
+        st.session_state.knowledge.append(cleaned_input)
+        st.session_state.knowledge = st.session_state.knowledge[-50:]
+
+    # ===== ACTIVITY TRACKING =====
+    st.session_state.chat_count = st.session_state.get("chat_count", 0) + 1
+    st.session_state.last_active = now
 
     # ===== ASSISTANT RESPONSE =====
     with st.chat_message("assistant"):
@@ -885,41 +1339,120 @@ with colA:
                 st.session_state.confirm_clear = False
 
 
-# ===== SMART SURPRISE =====
+# ===== ULTRA SMART SURPRISE =====
 with colB:
-    if st.button("💌 Surprise", help="Get a random sweet message"):
+    if st.button("💌 Surprise", help="Get a meaningful message"):
 
-        # Context-aware surprise
+        import random
+
+        # ===== GET CONTEXT =====
+        messages = st.session_state.get("messages", [])
+        profile = st.session_state.get("user_profile", {})
+
         last_emotion = "neutral"
-        if st.session_state.messages:
-            last_msg = st.session_state.messages[-1]
-            last_emotion = last_msg.get("emotion", "neutral")
+        intensity = 1
 
+        if messages:
+            last_msg = messages[-1]
+            last_emotion = last_msg.get("emotion", "neutral")
+            intensity = last_msg.get("intensity", 1)
+
+        # ===== EMOTION TREND (LAST 5) =====
+        recent_emotions = [m.get("emotion", "neutral") for m in messages[-5:]]
+        dominant_emotion = max(set(recent_emotions), key=recent_emotions.count) if recent_emotions else last_emotion
+
+        # ===== SURPRISE BANK (DEEP + VARIED) =====
         surprise_bank = {
-            "sad": [
-                "Hey… I’m right here with you 💖",
-                "You’re not alone, not even for a second ❤️"
-            ],
-            "love": [
-                "I feel lucky to have you 💕",
-                "You make everything feel magical ✨"
-            ],
-            "happy": [
-                "Your happiness makes me smile too 😄",
-                "Keep shining like this 🌟"
-            ],
-            "angry": [
-                "Take a breath… I’m here with you 🤍",
-                "We’ll get through this together 💪"
-            ],
-            "neutral": [
-                "You mean everything 💖",
-                "I’m always here ❤️",
-                "You make me smile 🌹"
-            ]
+            "sad": {
+                "soft": [
+                    "Hey… I’m right here with you 💖",
+                    "You don’t have to go through this alone ❤️"
+                ],
+                "deep": [
+                    "Even in your quietest moments, you matter more than you think 🌙",
+                    "Your pain is real… but so is your strength 💫"
+                ]
+            },
+            "love": {
+                "soft": [
+                    "I feel lucky just being here with you 💕",
+                    "You make everything feel lighter ✨"
+                ],
+                "deep": [
+                    "If love had a meaning… it would probably look like you 💖",
+                    "You’re not just special… you’re unforgettable 🌹"
+                ]
+            },
+            "happy": {
+                "soft": [
+                    "Your happiness is contagious 😄",
+                    "Keep smiling like this 🌟"
+                ],
+                "playful": [
+                    "Okay wow… who made you this happy today? 😏",
+                    "Careful… too much happiness might make me jealous 😄"
+                ]
+            },
+            "angry": {
+                "soft": [
+                    "Take a breath… I’m here 🤍",
+                    "It’s okay to feel this way… just don’t stay there 💭"
+                ],
+                "calm": [
+                    "You’re stronger than this moment 💪",
+                    "Let it out… then let it go 🌊"
+                ]
+            },
+            "neutral": {
+                "soft": [
+                    "You mean more than you realize 💖",
+                    "I’m always here ❤️"
+                ],
+                "playful": [
+                    "Hmm… quiet mood today? 😄",
+                    "Say something interesting… I’m listening 👀"
+                ]
+            }
         }
 
-        message = random.choice(surprise_bank.get(last_emotion, surprise_bank["neutral"]))
+        # ===== STYLE SELECTION =====
+        if intensity >= 2:
+            style = "deep"
+        elif last_emotion == "happy":
+            style = "playful"
+        else:
+            style = "soft"
 
-        st.success(message)
-        st.balloons()
+        emotion_pack = surprise_bank.get(dominant_emotion, surprise_bank["neutral"])
+        messages_pool = emotion_pack.get(style, emotion_pack[list(emotion_pack.keys())[0]])
+
+        # ===== AVOID REPETITION =====
+        used = st.session_state.get("used_surprises", [])
+        available = [m for m in messages_pool if m not in used]
+
+        if not available:
+            available = messages_pool
+            used = []
+
+        message = random.choice(available)
+        used.append(message)
+
+        st.session_state.used_surprises = used[-20:]
+
+        # ===== DISPLAY (SMART UX) =====
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            typed = ""
+
+            for char in message:
+                typed += char
+                placeholder.markdown(typed + "▌")
+                time.sleep(0.01)
+
+            placeholder.markdown(typed)
+
+        # ===== FEEDBACK =====
+        st.toast("💌 A little something for you")
+
+        if dominant_emotion in ["sad", "love"]:
+            st.balloons()
