@@ -19,11 +19,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 # ==============================
-# VOICE SUPPORT
-# ==============================
-import speech_recognition as sr
-
-# ==============================
 # CONFIG
 # ==============================
 st.set_page_config(page_title="LoveBot 💖 Pro", layout="wide", page_icon="💖")
@@ -45,7 +40,7 @@ def load_advanced_model():
             data = pickle.load(f)
         st.toast("✅ Advanced Semantic Model Loaded Successfully", icon="🧠")
         return data["df"], data.get("embedder"), data["embeddings"]
-    except Exception as e:
+    except Exception:
         st.warning("⚠️ Using fallback knowledge mode")
         return None, None, None
 
@@ -149,7 +144,7 @@ def read_pdf(file):
         return ""
 
 # ==============================
-# SEMANTIC SEARCH (Fixed)
+# SEMANTIC SEARCH
 # ==============================
 def semantic_search(query, top_k=3):
     if df is None or embeddings is None:
@@ -220,23 +215,8 @@ Answer with love and intelligence:
 """
         response = model_ai.generate_content(prompt)
         return response.text.strip()
-    except Exception as e:
+    except Exception:
         return "I'm thinking about you so deeply right now... 💭❤️"
-
-# ==============================
-# VOICE INPUT
-# ==============================
-def voice_to_text():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎤 Listening... (Speak now)")
-        try:
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
-            text = recognizer.recognize_google(audio, language="en-IN")
-            return text
-        except:
-            st.error("Voice input failed. Please type instead.")
-            return None
 
 # ==============================
 # UI
@@ -273,16 +253,8 @@ for msg in st.session_state.messages:
     else:
         st.markdown(f"**💖 LoveBot:** {msg['content']}")
 
-# Input Area
-col_input1, col_input2 = st.columns([4, 1])
-with col_input1:
-    user_input = st.chat_input("Type your message… 💬❤️")
-
-with col_input2:
-    if st.button("🎤 Voice", use_container_width=True):
-        spoken = voice_to_text()
-        if spoken:
-            user_input = spoken
+# Input Area (Voice Removed)
+user_input = st.chat_input("Type your message… 💬❤️")
 
 # Main Logic
 if user_input:
@@ -348,4 +320,4 @@ with col2:
         st.balloons()
 
 with col3:
-    st.caption("💾 All chats & knowledge saved in Google Drive\nSemantic Intelligence + Voice Enabled")
+    st.caption("💾 All chats & knowledge saved in Google Drive\nSemantic Intelligence Active")
