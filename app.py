@@ -5,11 +5,9 @@ import time
 import io
 import os
 from pathlib import Path
-import numpy as np
 from serpapi import GoogleSearch
 import google.generativeai as genai
 from pypdf import PdfReader
-from datetime import datetime
 
 # ==============================
 # GOOGLE DRIVE
@@ -31,7 +29,7 @@ SERP_KEY = st.secrets["SERPAPI_KEY"]
 VAULT_PASSWORD = st.secrets.get("VAULT_PASSWORD", "Rish")
 
 # ==============================
-# LOAD MODEL (Fixed for deployment)
+# LOAD MODEL
 # ==============================
 @st.cache_resource
 def load_advanced_model():
@@ -153,7 +151,6 @@ def semantic_search(query, top_k=3):
         query_lower = query.lower()
         best_score = 0.0
         best_answer = None
-        
         for idx, row in df.iterrows():
             q = str(row['question']).lower()
             if any(word in q for word in query_lower.split() if len(word) > 2):
@@ -161,7 +158,6 @@ def semantic_search(query, top_k=3):
                 if score > best_score:
                     best_score = score
                     best_answer = row['answer']
-        
         if best_score > 0.70:
             return best_answer, best_score
         return None, best_score
@@ -226,13 +222,41 @@ st.caption(f"🧠 **Permanent Google Drive Memory** | Knowledge: **{len(st.sessi
 
 Path("photos").mkdir(exist_ok=True)
 
-# File Upload
-st.subheader("📂 Teach LoveBot (Saved Forever)")
-files = st.file_uploader("Upload PDFs or Text files", type=["pdf", "txt"], accept_multiple_files=True)
+# File Upload Section (Hidden, triggered by icon)
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
 
-if files:
+# Chat Display
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.markdown(f"**🟢 You:** {msg['content']}")
+    else:
+        st.markdown(f"**💖 LoveBot:** {msg['content']}")
+
+# ====================== INPUT AREA WITH UPLOAD ICON ======================
+col_input, col_upload = st.columns([5, 0.8])
+
+with col_input:
+    user_input = st.chat_input("Type your message… 💬❤️")
+
+with col_upload:
+    # Square Upload Button with Icon
+    if st.button("📎", key="upload_btn", help="Upload PDF or TXT to teach LoveBot", use_container_width=True):
+        uploaded = st.file_uploader(
+            "Upload PDFs or Text files", 
+            type=["pdf", "txt"], 
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            key="hidden_uploader"
+        )
+        if uploaded:
+            st.session_state.uploaded_files = uploaded
+            st.rerun()
+
+# Handle uploaded files after button click
+if st.session_state.get("uploaded_files"):
     new_chunks = []
-    for file in files:
+    for file in st.session_state.uploaded_files:
         if file.type == "application/pdf":
             text = read_pdf(file)
         else:
@@ -244,17 +268,8 @@ if files:
         st.session_state.knowledge.extend(new_chunks)
         save_to_drive(st.session_state.knowledge, "lovebot_knowledge.pkl")
         st.success(f"✅ Learned {len(new_chunks)} new memories! Saved permanently.")
+        st.session_state.uploaded_files = []  # Clear after processing
         st.rerun()
-
-# Chat Display
-for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f"**🟢 You:** {msg['content']}")
-    else:
-        st.markdown(f"**💖 LoveBot:** {msg['content']}")
-
-# Input Area (Voice Removed)
-user_input = st.chat_input("Type your message… 💬❤️")
 
 # Main Logic
 if user_input:
@@ -279,11 +294,10 @@ if user_input:
     save_to_drive(st.session_state.messages, "lovebot_messages.pkl")
     st.rerun()
 
-# Photo Vault
+# Photo Vault (unchanged)
 if st.session_state.show_password:
     st.subheader("🔐 Private Memory Vault")
     password = st.text_input("Enter Passkey", type="password", key="pass_input")
-    
     if password == VAULT_PASSWORD:
         st.success("Access Granted ❤️")
         col1, col2 = st.columns(2)
@@ -320,4 +334,4 @@ with col2:
         st.balloons()
 
 with col3:
-    st.caption("💾 All chats & knowledge saved in Google Drive\nSemantic Intelligence Active")
+    st.caption("💾 All chats & knowledge saved in Google Drive")
