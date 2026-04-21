@@ -1,13 +1,27 @@
-streamlit
+# Core
+streamlit>=1.38.0
+
+# Data & ML
 pandas
 numpy
-sentence-transformers
+sentence-transformers>=3.0.0
+
+# AI & Search
 google-generativeai
-serpapi
+google-search-results   # ← This is the correct package for your code
+
+# Document Processing
 pypdf
+
+# Google Drive
 google-api-python-client
 google-auth
+google-auth-oauthlib
+
+# Voice
 speechrecognition
-pydub  # for better audio if needed
-python-dotenv
-joblib  # safer than pickle
+pydub
+
+# Utilities
+tqdm
+faiss-cpu
