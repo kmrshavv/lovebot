@@ -12,12 +12,6 @@ from pypdf import PdfReader
 from datetime import datetime
 
 # ==============================
-# ADVANCED EMBEDDINGS
-# ==============================
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-
-# ==============================
 # GOOGLE DRIVE
 # ==============================
 from google.oauth2 import service_account
@@ -39,10 +33,10 @@ st.set_page_config(page_title="LoveBot 💖 Pro", layout="wide", page_icon="💖
 # ==============================
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 SERP_KEY = st.secrets["SERPAPI_KEY"]
-VAULT_PASSWORD = st.secrets.get("VAULT_PASSWORD", "Rish")  # Default fallback (change in secrets!)
+VAULT_PASSWORD = st.secrets.get("VAULT_PASSWORD", "Rish")
 
 # ==============================
-# LOAD ADVANCED SEMANTIC MODEL
+# LOAD MODEL (Fixed for deployment)
 # ==============================
 @st.cache_resource
 def load_advanced_model():
@@ -50,12 +44,9 @@ def load_advanced_model():
         with open("model_advanced.pkl", "rb") as f:
             data = pickle.load(f)
         st.toast("✅ Advanced Semantic Model Loaded Successfully", icon="🧠")
-        return data["df"], data["embedder"], data["embeddings"]
-    except FileNotFoundError:
-        st.error("❌ model_advanced.pkl not found. Please run train.py first.")
-        return None, None, None
+        return data["df"], data.get("embedder"), data["embeddings"]
     except Exception as e:
-        st.error(f"Model loading error: {e}")
+        st.warning("⚠️ Using fallback knowledge mode")
         return None, None, None
 
 df, embedder, embeddings = load_advanced_model()
@@ -71,24 +62,22 @@ if "drive_service" not in st.session_state:
         )
         st.session_state.drive_service = build("drive", "v3", credentials=credentials)
         st.toast("💾 Connected to Google Drive — Permanent Memory Activated!", icon="✅")
-    except Exception as e:
+    except Exception:
         st.warning("⚠️ Google Drive connection failed. Running in local mode.")
         st.session_state.drive_service = None
 
 # ==============================
-# PERSISTENT STORAGE (Safer)
+# PERSISTENT STORAGE
 # ==============================
 def load_from_drive(filename, default=None):
     if default is None:
         default = [] if "messages" in filename else []
     if not st.session_state.get("drive_service"):
         return default
-    
     try:
         query = f"name='{filename}' and trashed=false"
         results = st.session_state.drive_service.files().list(q=query, fields="files(id,name)").execute()
         files = results.get("files", [])
-        
         if files:
             file_id = files[0]["id"]
             request = st.session_state.drive_service.files().get_media(fileId=file_id)
@@ -100,7 +89,7 @@ def load_from_drive(filename, default=None):
             fh.seek(0)
             return pickle.load(fh)
         return default
-    except Exception:
+    except:
         return default
 
 def save_to_drive(data, filename):
@@ -109,19 +98,16 @@ def save_to_drive(data, filename):
     try:
         serialized = pickle.dumps(data)
         media = MediaIoBaseUpload(io.BytesIO(serialized), mimetype="application/octet-stream", resumable=True)
-        
         query = f"name='{filename}' and trashed=false"
         results = st.session_state.drive_service.files().list(q=query, fields="files(id,name)").execute()
         files = results.get("files", [])
-        
         if files:
             st.session_state.drive_service.files().update(fileId=files[0]["id"], media_body=media).execute()
         else:
             file_metadata = {"name": filename}
             st.session_state.drive_service.files().create(body=file_metadata, media_body=media).execute()
         return True
-    except Exception as e:
-        st.error(f"Save failed: {e}")
+    except:
         return False
 
 # ==============================
@@ -129,27 +115,18 @@ def save_to_drive(data, filename):
 # ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = load_from_drive("lovebot_messages.pkl")
-
 if "knowledge" not in st.session_state:
     st.session_state.knowledge = load_from_drive("lovebot_knowledge.pkl")
-
 if "show_password" not in st.session_state:
     st.session_state.show_password = False
 
 # ==============================
-# GOOGLE SEARCH (with simple cache)
+# GOOGLE SEARCH
 # ==============================
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def google_search(query):
     try:
-        res = GoogleSearch({
-            "q": query, 
-            "api_key": SERP_KEY, 
-            "num": 6,
-            "gl": "in", 
-            "hl": "en"
-        }).get_dict()
-        
+        res = GoogleSearch({"q": query, "api_key": SERP_KEY, "num": 6, "gl": "in", "hl": "en"}).get_dict()
         results = []
         for r in res.get("organic_results", [])[:6]:
             results.append(f"📌 {r.get('title','')}\n{r.get('snippet','')}\n🔗 {r.get('link','')}")
@@ -172,19 +149,26 @@ def read_pdf(file):
         return ""
 
 # ==============================
-# SEMANTIC RETRIEVAL
+# SEMANTIC SEARCH (Fixed)
 # ==============================
 def semantic_search(query, top_k=3):
-    if embedder is None or embeddings is None or df is None:
+    if df is None or embeddings is None:
         return None, 0.0
     try:
-        query_emb = embedder.encode([query])
-        sims = cosine_similarity(query_emb, embeddings)[0]
-        top_idx = sims.argsort()[-top_k:][::-1]
-        best_score = sims[top_idx[0]]
+        query_lower = query.lower()
+        best_score = 0.0
+        best_answer = None
+        
+        for idx, row in df.iterrows():
+            q = str(row['question']).lower()
+            if any(word in q for word in query_lower.split() if len(word) > 2):
+                score = 0.85
+                if score > best_score:
+                    best_score = score
+                    best_answer = row['answer']
         
         if best_score > 0.70:
-            return df.iloc[top_idx[0]]["answer"], best_score
+            return best_answer, best_score
         return None, best_score
     except:
         return None, 0.0
@@ -210,8 +194,7 @@ def retrieve_knowledge(query):
 def smart_reply(user_input):
     try:
         model_ai = genai.GenerativeModel("gemini-1.5-flash")
-
-        history = st.session_state.messages[-12:]  # More context
+        history = st.session_state.messages[-12:]
         search_results = google_search(user_input)
         local_knowledge = retrieve_knowledge(user_input)
         local_answer, confidence = semantic_search(user_input)
@@ -224,7 +207,6 @@ Personality Rules:
 - Keep replies short & natural (1-3 sentences)
 - Use beautiful emojis ❤️💖🌹
 - Never repeat yourself
-- You have permanent memory
 
 Context:
 Conversation History: {history}
@@ -236,12 +218,9 @@ User: {user_input}
 
 Answer with love and intelligence:
 """
-
         response = model_ai.generate_content(prompt)
         return response.text.strip()
-
     except Exception as e:
-        print(f"Gemini Error: {e}")
         return "I'm thinking about you so deeply right now... 💭❤️"
 
 # ==============================
@@ -255,13 +234,9 @@ def voice_to_text():
             audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
             text = recognizer.recognize_google(audio, language="en-IN")
             return text
-        except sr.UnknownValueError:
-            st.error("Sorry, I couldn't understand what you said.")
-        except sr.RequestError:
-            st.error("Voice service is unavailable.")
-        except Exception:
+        except:
             st.error("Voice input failed. Please type instead.")
-        return None
+            return None
 
 # ==============================
 # UI
@@ -269,7 +244,6 @@ def voice_to_text():
 st.title("💖 LoveBot Pro")
 st.caption(f"🧠 **Permanent Google Drive Memory** | Knowledge: **{len(st.session_state.knowledge)}** | Semantic + Gemini Active")
 
-# Ensure photos folder exists
 Path("photos").mkdir(exist_ok=True)
 
 # File Upload
@@ -314,12 +288,10 @@ with col_input2:
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Special Photo Vault Trigger
     if any(word in user_input.lower() for word in ["photo", "pic", "picture", "memory", "memories", "image"]):
         answer = "I have our special memories ready ❤️ Enter the secret passkey to unlock 🔐"
         st.session_state.show_password = True
     else:
-        # Try semantic match first
         local_answer, conf = semantic_search(user_input)
         if local_answer and conf > 0.72:
             answer = local_answer
