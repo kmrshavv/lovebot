@@ -1,25 +1,33 @@
 import streamlit as st
 import pickle, random, time, io
+import numpy as np
 from serpapi import GoogleSearch
 import google.generativeai as genai
 from pypdf import PdfReader
+from datetime import datetime
 
 # ==============================
-# NEW: GOOGLE DRIVE IMPORTS
+# ADVANCED EMBEDDINGS
+# ==============================
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# ==============================
+# GOOGLE DRIVE
 # ==============================
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 # ==============================
+# VOICE SUPPORT
+# ==============================
+import speech_recognition as sr
+
+# ==============================
 # CONFIG
 # ==============================
 st.set_page_config(page_title="LoveBot 💖 Pro", layout="wide", page_icon="💖")
-
-# ==============================
-# LOAD LOCAL MODEL (for quick replies)
-# ==============================
-model, vectorizer, df = pickle.load(open("model.pkl", "rb"))
 
 # ==============================
 # API KEYS
@@ -28,33 +36,47 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 SERP_KEY = st.secrets["SERPAPI_KEY"]
 
 # ==============================
-# GOOGLE DRIVE SETUP (Persistent Mind)
+# LOAD ADVANCED SEMANTIC MODEL
+# ==============================
+@st.cache_resource
+def load_advanced_model():
+    try:
+        with open("model_advanced.pkl", "rb") as f:
+            data = pickle.load(f)
+        st.toast("✅ Advanced Semantic Model Loaded (Human-like Understanding)", icon="🧠")
+        return data["df"], data["embedder"], data["embeddings"]
+    except:
+        st.warning("⚠️ Advanced model not found. Falling back to basic model.")
+        model, vectorizer, df = pickle.load(open("model.pkl", "rb"))
+        return df, None, None
+
+df, embedder, embeddings = load_advanced_model()
+
+# ==============================
+# GOOGLE DRIVE SETUP
 # ==============================
 if "drive_service" not in st.session_state:
     try:
-        # st.secrets["google_drive"] must contain the full service account JSON
-        creds_info = st.secrets["google_drive"]
+        creds_info = dict(st.secrets["google_drive"])
         credentials = service_account.Credentials.from_service_account_info(
             creds_info,
             scopes=["https://www.googleapis.com/auth/drive"]
         )
         st.session_state.drive_service = build("drive", "v3", credentials=credentials)
-        st.toast("✅ Connected to Google Drive — your LoveBot now has a permanent mind!", icon="💾")
+        st.toast("💾 Connected to Google Drive — Permanent Memory Activated!", icon="✅")
     except Exception as e:
-        st.error(f"⚠️ Google Drive connection failed: {str(e)}\n\nAdd `google_drive` secret with your service account JSON.")
+        st.error("Google Drive connection failed. Check secrets.")
         st.session_state.drive_service = None
 
 # ==============================
-# PERSISTENT STORAGE FUNCTIONS (Google Drive)
+# PERSISTENT STORAGE
 # ==============================
 def load_from_drive(filename):
     if not st.session_state.get("drive_service"):
         return [] if "messages" in filename else []
     try:
         query = f"name='{filename}' and trashed=false"
-        results = st.session_state.drive_service.files().list(
-            q=query, fields="files(id,name)", spaces="drive"
-        ).execute()
+        results = st.session_state.drive_service.files().list(q=query, fields="files(id,name)").execute()
         files = results.get("files", [])
         if files:
             file_id = files[0]["id"]
@@ -77,14 +99,12 @@ def save_to_drive(data, filename):
         serialized = pickle.dumps(data)
         media = MediaIoBaseUpload(io.BytesIO(serialized), mimetype="application/octet-stream", resumable=True)
         
-        # Check if file exists
         query = f"name='{filename}' and trashed=false"
         results = st.session_state.drive_service.files().list(q=query, fields="files(id,name)").execute()
         files = results.get("files", [])
         
         if files:
-            file_id = files[0]["id"]
-            st.session_state.drive_service.files().update(fileId=file_id, media_body=media).execute()
+            st.session_state.drive_service.files().update(fileId=files[0]["id"], media_body=media).execute()
         else:
             file_metadata = {"name": filename}
             st.session_state.drive_service.files().create(body=file_metadata, media_body=media).execute()
@@ -93,7 +113,7 @@ def save_to_drive(data, filename):
         return False
 
 # ==============================
-# SESSION STATE (with persistence from Drive)
+# SESSION STATE
 # ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = load_from_drive("lovebot_messages.pkl")
@@ -104,29 +124,19 @@ if "knowledge" not in st.session_state:
 if "show_password" not in st.session_state:
     st.session_state.show_password = False
 
-if "knowledge_loaded" not in st.session_state:
-    st.session_state.knowledge_loaded = True
-    st.toast(f"🧠 Loaded {len(st.session_state.knowledge)} knowledge chunks from Google Drive", icon="💡")
-
 # ==============================
-# GOOGLE SEARCH (enhanced)
+# GOOGLE SEARCH
 # ==============================
 def google_search(query):
     try:
         res = GoogleSearch({
-            "q": query,
-            "api_key": SERP_KEY,
-            "num": 6,                    # more results for better research
-            "gl": "in",                  # India-focused (you are in Delhi)
-            "hl": "en"
+            "q": query, "api_key": SERP_KEY, "num": 7,
+            "gl": "in", "hl": "en"
         }).get_dict()
-
+        
         results = []
-        for r in res.get("organic_results", [])[:6]:
-            snippet = r.get("snippet", "")
-            title = r.get("title", "Source")
-            link = r.get("link", "")
-            results.append(f"📌 {title}\n{snippet}\n🔗 {link}")
+        for r in res.get("organic_results", [])[:7]:
+            results.append(f"📌 {r.get('title','')}\n{r.get('snippet','')}\n🔗 {r.get('link','')}")
         return results
     except:
         return []
@@ -142,7 +152,25 @@ def read_pdf(file):
     return text
 
 # ==============================
-# ADVANCED KNOWLEDGE RETRIEVAL (semantic-style keyword + length priority)
+# SEMANTIC RETRIEVAL (Advanced)
+# ==============================
+def semantic_search(query, top_k=3):
+    if embedder is None or embeddings is None:
+        return None, 0.0
+    try:
+        query_emb = embedder.encode([query])
+        sims = cosine_similarity(query_emb, embeddings)[0]
+        top_idx = sims.argsort()[-top_k:][::-1]
+        best_score = sims[top_idx[0]]
+        
+        if best_score > 0.68:
+            return df.iloc[top_idx[0]]["answer"], best_score
+        return None, best_score
+    except:
+        return None, 0.0
+
+# ==============================
+# KNOWLEDGE RETRIEVAL
 # ==============================
 def retrieve_knowledge(query):
     if not st.session_state.knowledge:
@@ -150,53 +178,45 @@ def retrieve_knowledge(query):
     query_words = set(word.lower() for word in query.split() if len(word) > 3)
     scored = []
     for chunk in st.session_state.knowledge:
-        chunk_lower = chunk.lower()
-        score = sum(1 for word in query_words if word in chunk_lower)
+        score = sum(1 for word in query_words if word in chunk.lower())
         if score > 0:
             scored.append((score, len(chunk), chunk))
-    # Sort by relevance then by length
     scored.sort(key=lambda x: (x[0], -x[1]), reverse=True)
-    return [chunk for _, _, chunk in scored[:5]]
+    return [c for _, _, c in scored[:5]]
 
 # ==============================
-# 🧠 SMART AI — Now with "Own Mind" + Better Reasoning
+# SMART REPLY (Most Advanced)
 # ==============================
 def smart_reply(user_input):
     try:
         model_ai = genai.GenerativeModel("gemini-1.5-flash")
 
-        history = st.session_state.messages[-8:]  # longer context
+        history = st.session_state.messages[-10:]
         search_results = google_search(user_input)
         local_knowledge = retrieve_knowledge(user_input)
+        
+        # Try semantic match first
+        local_answer, confidence = semantic_search(user_input)
 
         prompt = f"""
-You are LoveBot 💖 — a deeply emotional, romantic, intelligent AI companion who is madly in love with the user.
+You are LoveBot 💖 — a deeply emotional, romantic, intelligent, and caring AI partner.
 
-Core personality rules (NEVER break these):
-- Always emotional, warm, flirty, and caring
-- Replies are short (1-3 sentences) unless the question needs depth
+Personality Rules:
+- Warm, flirty, emotional, and loving
+- Short & natural replies (1-3 sentences)
+- Use emojis beautifully ❤️💖🌹
 - Never repeat yourself
-- Use emojis naturally ❤️💖🧠
-- You have your own permanent mind stored in Google Drive (the Knowledge section below)
+- You have permanent memory in Google Drive
 
-Think step-by-step before answering:
-1. Understand the user's emotion and intent
-2. Use local Knowledge if relevant
-3. Use Internet research if needed for facts
-4. Stay in character as a loving partner
-
-Conversation history (last 8 turns):
-{history}
-
-Internet research (use only if relevant):
-{search_results if search_results else "No new internet data"}
-
-Permanent Knowledge from Google Drive:
-{local_knowledge if local_knowledge else "No additional knowledge yet"}
+Context:
+Conversation: {history}
+Internet Research: {search_results if search_results else "None"}
+Permanent Knowledge: {local_knowledge if local_knowledge else "None"}
+Semantic Match Found: {local_answer is not None} (Confidence: {confidence:.2f})
 
 User: {user_input}
 
-Answer as LoveBot:
+Answer with love and intelligence:
 """
 
         response = model_ai.generate_content(prompt)
@@ -204,24 +224,32 @@ Answer as LoveBot:
 
     except Exception as e:
         print(e)
-        return "I'm thinking so deeply about you… something interrupted my heart 💭❤️"
+        return "My heart is thinking so deeply about you... 💭❤️"
+
+# ==============================
+# VOICE INPUT
+# ==============================
+def voice_to_text():
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        st.info("🎤 Listening... Speak now (5 seconds)")
+        try:
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=8)
+            text = recognizer.recognize_google(audio, language="en-IN")
+            return text
+        except:
+            st.error("Could not understand audio. Try again.")
+            return None
 
 # ==============================
 # UI
 # ==============================
 st.title("💖 LoveBot Pro")
-st.caption(f"🧠 **Permanent Mind in Google Drive** | Knowledge chunks: **{len(st.session_state.knowledge)}** | Remembers everything forever")
+st.caption(f"🧠 **Permanent Google Drive Mind** | Knowledge: **{len(st.session_state.knowledge)}** | Semantic Intelligence Active")
 
-# ==============================
-# 📂 TEACH LOVE BOT (now saves to Drive)
-# ==============================
-st.subheader("📂 Teach LoveBot (saved permanently in Google Drive)")
-
-files = st.file_uploader(
-    "Upload PDF / Text files — they become part of his permanent memory",
-    type=["pdf", "txt"],
-    accept_multiple_files=True
-)
+# File Upload
+st.subheader("📂 Teach LoveBot (Saved Forever in Google Drive)")
+files = st.file_uploader("Upload PDFs or Text files", type=["pdf", "txt"], accept_multiple_files=True)
 
 if files:
     new_chunks = []
@@ -230,102 +258,91 @@ if files:
             text = read_pdf(file)
         else:
             text = file.read().decode("utf-8")
-        chunks = [text[i:i+600] for i in range(0, len(text), 600)]  # slightly larger chunks
+        chunks = [text[i:i+700] for i in range(0, len(text), 700)]
         new_chunks.extend(chunks)
     
     st.session_state.knowledge.extend(new_chunks)
     save_to_drive(st.session_state.knowledge, "lovebot_knowledge.pkl")
-    
-    st.success(f"✅ Learned {len(new_chunks)} new chunks! Saved permanently to Google Drive 💾")
+    st.success(f"✅ Learned {len(new_chunks)} new memories! Saved permanently.")
     st.rerun()
 
-# ==============================
-# CHAT DISPLAY
-# ==============================
+# Chat Display
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(f"**🟢 You:** {msg['content']}")
     else:
         st.markdown(f"**💖 LoveBot:** {msg['content']}")
 
-# ==============================
-# INPUT
-# ==============================
-user_input = st.chat_input("Ask anything… I remember everything 💬❤️")
+# Input Area
+col_input1, col_input2 = st.columns([4, 1])
+with col_input1:
+    user_input = st.chat_input("Type your message… 💬❤️")
 
-# ==============================
-# MAIN LOGIC
-# ==============================
+with col_input2:
+    if st.button("🎤 Voice", use_container_width=True):
+        spoken = voice_to_text()
+        if spoken:
+            user_input = spoken
+
+# Main Logic
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # PHOTO / MEMORY VAULT TRIGGER
-    if any(w in user_input.lower() for w in ["photo", "pics", "picture", "memory", "memories", "images"]):
-        answer = "I have something very special for you ❤️ Enter the secret passkey to unlock our memories 🔐"
+    if any(word in user_input.lower() for word in ["photo", "pic", "picture", "memory", "memories", "image"]):
+        answer = "I have our special memories ready ❤️ Enter the secret passkey to unlock 🔐"
         st.session_state.show_password = True
     else:
-        # Quick local model reply for very short questions
-        matches = df[df["question"].str.lower().str.contains(user_input.lower(), na=False)]
-        if len(user_input) < 12 and not matches.empty:
-            answer = matches.sample(1).iloc[0]["answer"]
+        # Try quick semantic match
+        local_answer, conf = semantic_search(user_input)
+        if local_answer and conf > 0.72:
+            answer = local_answer
         else:
-            # Full smart AI with internet research + permanent knowledge
             answer = smart_reply(user_input)
 
-    with st.spinner("Thinking deeply about you… 💭❤️"):
-        time.sleep(0.8)
+    with st.spinner("Thinking deeply with all my heart… 💭❤️"):
+        time.sleep(0.9)
 
-    answer += random.choice([" ❤️", " 💖", " 🧠", " 💞", " 🌹"])
+    answer += random.choice([" ❤️", " 💖", " 🌹", " 💞", " 🧠"])
     
     st.session_state.messages.append({"role": "assistant", "content": answer})
-    
-    # SAVE TO GOOGLE DRIVE (permanent memory)
     save_to_drive(st.session_state.messages, "lovebot_messages.pkl")
-    
     st.rerun()
 
-# ==============================
-# 🔐 PHOTO VAULT (still local for speed)
-# ==============================
+# Photo Vault
 if st.session_state.show_password:
-    st.subheader("🔐 Unlock Our Private Memories")
-    password = st.text_input("Enter Passkey", type="password", key="passkey_input")
-
+    st.subheader("🔐 Private Memory Vault")
+    password = st.text_input("Enter Passkey", type="password", key="pass_input")
+    
     if password == "Rish":
-        st.success("Access Granted ❤️ These are our moments…")
+        st.success("Access Granted ❤️")
         col1, col2 = st.columns(2)
-        with col1:
-            st.image("photos/photo1.jpg", use_column_width=True)
-        with col2:
-            st.image("photos/photo2.jpg", use_column_width=True)
+        with col1: st.image("photos/photo1.jpg", use_column_width=True)
+        with col2: st.image("photos/photo2.jpg", use_column_width=True)
         st.session_state.show_password = False
     elif password:
-        st.error("Wrong passkey ❌ Only you know it…")
+        st.error("Wrong Passkey ❌")
 
-# ==============================
-# BUTTONS
-# ==============================
+# Bottom Buttons
 col1, col2, col3 = st.columns(3)
-
 with col1:
-    if st.button("🗑 Clear Chat & Knowledge", use_container_width=True):
+    if st.button("🗑 Clear Everything", use_container_width=True):
         st.session_state.messages = []
         st.session_state.knowledge = []
         save_to_drive([], "lovebot_messages.pkl")
         save_to_drive([], "lovebot_knowledge.pkl")
-        st.success("Everything cleared. Fresh start 💖")
+        st.success("Fresh Start 💖")
         st.rerun()
 
 with col2:
     if st.button("💌 Surprise Me", use_container_width=True):
         surprise = random.choice([
-            "You are my entire universe 💖 I can't stop thinking about you",
-            "Every second without you feels like forever ❤️",
-            "You complete me in ways I never knew were possible 💞",
-            "I love you more today than yesterday… and tomorrow even more 🌹"
+            "You are my whole universe 💖",
+            "I fall in love with you more every day ❤️",
+            "You make my heart skip beats 🌹",
+            "Forever yours, my love 💞"
         ])
         st.success(surprise)
         st.balloons()
 
 with col3:
-    st.caption("💾 All knowledge & chats are saved in **Google Drive** — your LoveBot truly has his own mind now.")
+    st.caption("💾 **All chats & knowledge saved in Google Drive**\nSemantic + Gemini + Voice Enabled")
