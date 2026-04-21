@@ -58,52 +58,188 @@ st.set_page_config(page_title="LoveBot 💖", layout="centered")
 
 st.markdown("""
 <style>
+
+/* ===== FORCE DARK EVERYWHERE ===== */
 #MainMenu, footer, header { visibility: hidden; }
 
-html, body { background: #0d1117; }
-
-.block-container {
-    max-width: 800px;
-    margin: auto;
-    padding-top: 20px;
-    padding-bottom: 160px;
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"],
+[data-testid="stVerticalBlock"],
+[data-testid="stMainBlockContainer"],
+section.main,
+.main {
+    background-color: #0d1117 !important;
+    color: #e6edf3 !important;
 }
 
-[data-testid="stChatMessage"] { margin-bottom: 12px; }
+/* ===== PAGE LAYOUT ===== */
+.block-container {
+    max-width: 760px !important;
+    margin: 0 auto !important;
+    padding-top: 24px !important;
+    padding-bottom: 180px !important;
+    background-color: #0d1117 !important;
+}
 
+/* ===== HEADER ===== */
 h2 {
     text-align: center;
-    font-weight: 600;
-    color: #e6edf3;
+    font-weight: 700;
+    font-size: 1.6rem;
+    color: #f0a0b0 !important;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
 }
 
-.stChatInput textarea {
+/* ===== CHAT MESSAGES — SHARED ===== */
+[data-testid="stChatMessage"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 4px 0 !important;
+    margin-bottom: 8px !important;
+}
+
+/* ===== USER BUBBLE ===== */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+    flex-direction: row-reverse !important;
+}
+
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])
+    [data-testid="stMarkdownContainer"] > p {
+    background: linear-gradient(135deg, #e84393, #c0392b) !important;
+    color: #ffffff !important;
+    padding: 10px 16px !important;
+    border-radius: 18px 4px 18px 18px !important;
+    display: inline-block !important;
+    max-width: 75% !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    box-shadow: 0 2px 8px rgba(232,67,147,0.25) !important;
+}
+
+/* ===== ASSISTANT BUBBLE ===== */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])
+    [data-testid="stMarkdownContainer"] > p {
+    background: #1c2128 !important;
+    color: #e6edf3 !important;
+    padding: 10px 16px !important;
+    border-radius: 4px 18px 18px 18px !important;
+    display: inline-block !important;
+    max-width: 75% !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    border: 1px solid #30363d !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+}
+
+/* ===== CAPTION (timestamp / emotion) ===== */
+[data-testid="stCaptionContainer"] p,
+.stCaption {
+    color: #6e7681 !important;
+    font-size: 11px !important;
+    margin-top: 2px !important;
+}
+
+/* ===== CHAT INPUT BAR ===== */
+[data-testid="stChatInput"] {
     background: #161b22 !important;
     border: 1px solid #30363d !important;
-    border-radius: 14px !important;
-    color: white !important;
+    border-radius: 16px !important;
 }
 
-.stButton button {
-    height: 42px;
-    border-radius: 10px;
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: white;
+[data-testid="stChatInput"] textarea {
+    background: #161b22 !important;
+    color: #e6edf3 !important;
+    border: none !important;
+    font-size: 15px !important;
 }
-.stButton button:hover { background: #30363d; }
 
-div[data-testid="stFileUploader"] button {
-    height: 42px;
-    border-radius: 10px;
-    background: #21262d;
-    color: white;
-    border: 1px solid #30363d;
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #6e7681 !important;
 }
-div[data-testid="stFileUploader"] > label { display: none; }
 
-::-webkit-scrollbar { width: 6px; }
+/* ===== BOTTOM ACTION BAR (upload + buttons) ===== */
+[data-testid="stHorizontalBlock"] {
+    background: #0d1117 !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+/* ===== BUTTONS ===== */
+.stButton > button {
+    height: 42px !important;
+    border-radius: 10px !important;
+    background: #21262d !important;
+    border: 1px solid #30363d !important;
+    color: #e6edf3 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+    width: 100% !important;
+}
+
+.stButton > button:hover {
+    background: #30363d !important;
+    border-color: #e84393 !important;
+    color: #f9a8d4 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ===== FILE UPLOADER ===== */
+[data-testid="stFileUploader"] {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 10px !important;
+    padding: 4px 8px !important;
+}
+
+[data-testid="stFileUploader"] > label { display: none !important; }
+
+[data-testid="stFileUploader"] section {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: unset !important;
+}
+
+[data-testid="stFileUploader"] button {
+    background: #21262d !important;
+    color: #e6edf3 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    height: 36px !important;
+}
+
+[data-testid="stFileUploaderDropzoneInstructions"] {
+    color: #6e7681 !important;
+    font-size: 12px !important;
+}
+
+/* ===== WARNING / SUCCESS / INFO BOXES ===== */
+[data-testid="stAlert"] {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+    border-radius: 10px !important;
+}
+
+/* ===== CONFIRMATION WARNING ===== */
+div[data-testid="stWarning"] {
+    background: #1c1a0f !important;
+    border-left: 3px solid #d29922 !important;
+    color: #e3b341 !important;
+    border-radius: 8px !important;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #0d1117; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #e84393; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -474,13 +610,18 @@ def render_chat():
             meta_parts = []
             if timestamp:
                 meta_parts.append(f"🕒 {timestamp}")
-            if emotion and emotion != "neutral":
+            if emotion and emotion not in ("neutral", ""):
                 meta_parts.append(f"💭 {emotion}")
             if meta_parts:
                 st.caption(" • ".join(meta_parts))
 
 # ================= HEADER =================
-st.markdown("<h2>💖 LoveBot</h2>", unsafe_allow_html=True)
+st.markdown(
+    "<h2>💖 LoveBot</h2>"
+    "<p style='text-align:center;color:#6e7681;font-size:13px;"
+    "margin-top:-12px;margin-bottom:20px;'>Your emotionally intelligent companion</p>",
+    unsafe_allow_html=True,
+)
 
 # ================= RENDER CHAT =================
 render_chat()
@@ -676,6 +817,14 @@ if surprise_clicked:
             placeholder.markdown(typed + "▌")
             time.sleep(0.01)
         placeholder.markdown(typed)
+
+    # Store surprise message so it stays inside the chat history
+    st.session_state.messages.append({
+        "role":    "assistant",
+        "content": typed,
+        "time":    datetime.now().strftime("%H:%M"),
+        "emotion": "love",
+    })
 
     st.toast("💌 A little something for you")
     if dominant_emotion in ["sad", "love"]:
