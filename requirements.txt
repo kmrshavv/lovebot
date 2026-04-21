@@ -4,11 +4,12 @@ streamlit>=1.38.0
 # Data & ML
 pandas
 numpy
+torch
 sentence-transformers>=3.0.0
 
 # AI & Search
 google-generativeai
-google-search-results   # ← This is the correct package for your code
+google-search-results   # provides the `serpapi` module used in app.py
 
 # Document Processing
 pypdf
@@ -24,4 +25,3 @@ pydub
 
 # Utilities
 tqdm
-faiss-cpu
