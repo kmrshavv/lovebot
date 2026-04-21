@@ -6,3 +6,4 @@ serpapi
 pydrive2
 google-auth
 oauth2client
+google-search-results
