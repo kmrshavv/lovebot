@@ -2,8 +2,9 @@ import streamlit as st
 import pickle
 import random
 import time
-import io
 import os
+import numpy as np
+import re
 
 # ================= SAFE IMPORTS =================
 try:
@@ -19,13 +20,9 @@ except:
 from pypdf import PdfReader
 
 # ================= PAGE CONFIG =================
-st.set_page_config(
-    page_title="LoveBot Pro 💖",
-    page_icon="💖",
-    layout="centered"
-)
+st.set_page_config(page_title="LoveBot God Mode 💖", layout="centered")
 
-# ================= SAFE API SETUP =================
+# ================= API =================
 GEMINI_KEY = st.secrets.get("GEMINI_API_KEY", None)
 SERP_KEY = st.secrets.get("SERPAPI_KEY", None)
 VAULT_PASSWORD = st.secrets.get("VAULT_PASSWORD", "Rish")
@@ -44,7 +41,7 @@ def load_model():
 
 model_data = load_model()
 
-# ================= SESSION STATE =================
+# ================= SESSION =================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -54,7 +51,59 @@ if "knowledge" not in st.session_state:
 if "vault_open" not in st.session_state:
     st.session_state.vault_open = False
 
-# ================= GOOGLE SEARCH =================
+# ================= PDF =================
+def read_pdf(file):
+    try:
+        reader = PdfReader(file)
+        return " ".join([p.extract_text() or "" for p in reader.pages])
+    except:
+        return ""
+
+# ================= EMOTION DETECTION =================
+def detect_emotion(text):
+    text = text.lower()
+
+    emotions = {
+        "love": ["love", "miss you", "hug", "kiss", "forever"],
+        "sad": ["sad", "cry", "hurt", "alone", "miss"],
+        "happy": ["happy", "excited", "great", "amazing"],
+        "angry": ["angry", "hate", "annoyed", "frustrated"],
+        "flirty": ["baby", "jaan", "cutie", "hot", "date"]
+    }
+
+    scores = {k: 0 for k in emotions}
+
+    for emotion, words in emotions.items():
+        for w in words:
+            if w in text:
+                scores[emotion] += 1
+
+    return max(scores, key=scores.get)
+
+# ================= SEMANTIC SEARCH =================
+def semantic_search(query, top_k=3):
+    if not model_data:
+        return []
+
+    try:
+        embedder = model_data["embedder"]
+        embeddings = model_data["embeddings"]
+        df = model_data["df"]
+
+        q_vec = embedder.encode([query])[0]
+
+        sims = np.dot(embeddings, q_vec) / (
+            np.linalg.norm(embeddings, axis=1) * np.linalg.norm(q_vec)
+        )
+
+        top_idx = np.argsort(sims)[-top_k:][::-1]
+
+        return df.iloc[top_idx]["answer"].tolist()
+
+    except:
+        return []
+
+# ================= GOOGLE =================
 def google_search(query):
     if not GoogleSearch or not SERP_KEY:
         return []
@@ -70,73 +119,84 @@ def google_search(query):
     except:
         return []
 
-# ================= PDF READER =================
-def read_pdf(file):
+# ================= STREAM =================
+def stream_reply(prompt):
     try:
-        reader = PdfReader(file)
-        return " ".join([p.extract_text() or "" for p in reader.pages])
-    except:
-        return ""
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt, stream=True)
 
-# ================= SMART AI RESPONSE =================
-def smart_reply(user_input):
-    memory = st.session_state.knowledge[-5:]
-    web = google_search(user_input)
+        for chunk in response:
+            if hasattr(chunk, "text"):
+                yield chunk.text
+
+    except:
+        fallback = "I'm here for you ❤️"
+        for c in fallback:
+            yield c
+
+# ================= MAIN AI =================
+def generate_reply(user_input):
+
+    emotion = detect_emotion(user_input)
+
+    semantic_context = semantic_search(user_input)
+    memory_context = st.session_state.knowledge[-5:]
+    web_context = google_search(user_input)
 
     prompt = f"""
-You are LoveBot 💖 — a romantic, intelligent AI partner.
+You are LoveBot 💖 — emotionally intelligent AI.
 
-User Message:
+Detected Emotion: {emotion}
+
+User:
 {user_input}
 
+Relevant Knowledge:
+{semantic_context}
+
 Memory:
-{memory}
+{memory_context}
 
 Internet:
-{web}
+{web_context}
 
-Reply in 1–3 lines, natural, emotional, smart, and loving.
+Rules:
+- Adapt tone based on emotion
+- If sad → comforting
+- If love → romantic
+- If angry → calm and supportive
+- If flirty → playful
+
+Reply in 2–4 lines.
 """
 
-    try:
-        if genai and GEMINI_KEY:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            res = model.generate_content(prompt)
-            return res.text.strip()
-    except:
-        pass
-
-    return random.choice([
-        "I'm always here for you ❤️",
-        "You make my world brighter 💖",
-        "Tell me more, I'm listening 💕"
-    ])
+    return stream_reply(prompt)
 
 # ================= UI =================
-st.markdown("<h1 style='text-align:center;'>💖 LoveBot Pro</h1>", unsafe_allow_html=True)
-st.caption("Your Intelligent Romantic AI Companion")
+st.markdown("<h1 style='text-align:center;'>💖 LoveBot GOD+</h1>", unsafe_allow_html=True)
 
-# ================= CHAT DISPLAY =================
+# ================= CHAT =================
 for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        with st.chat_message("user"):
-            st.write(msg["content"])
-    else:
-        with st.chat_message("assistant"):
-            st.write(msg["content"])
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
 # ================= INPUT =================
-user_input = st.chat_input("Type your message... 💌")
+col1, col2 = st.columns([6, 1])
 
-# ================= FILE UPLOAD =================
-uploaded_files = st.file_uploader(
-    "📎 Upload PDF or TXT to teach LoveBot",
-    type=["pdf", "txt"],
-    accept_multiple_files=True
-)
+with col1:
+    user_input = st.chat_input("Type your message... 💌")
 
+with col2:
+    uploaded_files = st.file_uploader(
+        "📎",
+        type=["pdf", "txt"],
+        accept_multiple_files=True,
+        label_visibility="collapsed"
+    )
+
+# ================= UPLOAD =================
 if uploaded_files:
-    new_chunks = []
+    chunks = []
 
     for file in uploaded_files:
         if file.type == "application/pdf":
@@ -144,85 +204,75 @@ if uploaded_files:
         else:
             text = file.read().decode("utf-8", errors="ignore")
 
-        chunks = [text[i:i+500] for i in range(0, len(text), 500)]
-        new_chunks.extend(chunks)
+        chunks.extend([text[i:i+500] for i in range(0, len(text), 500)])
 
-    # LIMIT MEMORY SIZE (IMPORTANT)
-    st.session_state.knowledge = (st.session_state.knowledge + new_chunks)[-50:]
+    st.session_state.knowledge = (st.session_state.knowledge + chunks)[-50:]
+    st.success("Learned successfully!")
 
-    st.success(f"✅ Learned {len(new_chunks)} chunks!")
-
-# ================= MAIN CHAT =================
+# ================= CHAT FLOW =================
 if user_input:
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
+    st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Special trigger for vault
-    if any(word in user_input.lower() for word in ["photo", "memory", "image"]):
-        reply = "🔐 This memory is private... enter the passkey to unlock 💖"
+    if any(w in user_input.lower() for w in ["photo", "image", "memory"]):
+        reply = "🔐 Private memory. Enter passkey 💖"
         st.session_state.vault_open = True
+
+        with st.chat_message("assistant"):
+            st.write(reply)
+
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+
     else:
-        reply = smart_reply(user_input)
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            full_text = ""
 
-    # Typing animation (FIXED)
-    with st.chat_message("assistant"):
-        placeholder = st.empty()
-        full_text = ""
+            for chunk in generate_reply(user_input):
+                full_text += chunk
+                placeholder.markdown(full_text + "▌")
 
-        for char in reply:
-            full_text += char
-            placeholder.markdown(full_text + "▌")
-            time.sleep(0.01)
+            placeholder.markdown(full_text)
 
-        placeholder.markdown(full_text)
+        st.session_state.messages.append({"role": "assistant", "content": full_text})
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": full_text
-    })
-
-# ================= PHOTO VAULT =================
+# ================= VAULT =================
 if st.session_state.vault_open:
-    st.subheader("🔐 Private Memory Vault")
+    st.subheader("🔐 Private Vault")
 
-    password = st.text_input("Enter Passkey", type="password")
+    pwd = st.text_input("Enter Passkey", type="password")
 
-    if password == VAULT_PASSWORD:
+    if pwd == VAULT_PASSWORD:
         st.success("Access Granted ❤️")
 
         if os.path.exists("photos"):
-            images = os.listdir("photos")
-
+            imgs = os.listdir("photos")
             cols = st.columns(2)
 
-            for i, img in enumerate(images):
+            for i, img in enumerate(imgs):
                 path = os.path.join("photos", img)
-
                 if os.path.isfile(path):
                     with cols[i % 2]:
                         st.image(path, use_column_width=True)
 
         st.session_state.vault_open = False
 
-    elif password:
-        st.error("Wrong Passkey ❌")
+    elif pwd:
+        st.error("Wrong passkey ❌")
 
-# ================= ACTION BUTTONS =================
-col1, col2 = st.columns(2)
+# ================= ACTION =================
+colA, colB = st.columns(2)
 
-with col1:
+with colA:
     if st.button("🗑 Clear Chat"):
         st.session_state.messages = []
         st.session_state.knowledge = []
         st.rerun()
 
-with col2:
-    if st.button("💌 Surprise Me"):
+with colB:
+    if st.button("💌 Surprise"):
         st.success(random.choice([
-            "You are my universe 💖",
-            "I fall for you more every day ❤️",
-            "You're my favorite person 🌹"
+            "You’re everything to me 💖",
+            "I’m always with you ❤️",
+            "You make my world better 🌹"
         ]))
         st.balloons()
