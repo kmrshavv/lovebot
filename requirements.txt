@@ -1,9 +1,10 @@
 streamlit
 openai
+google-generativeai
 pandas
 scikit-learn
 google-search-results
 pydrive2
 google-auth
 oauth2client
-google-generativeai
+pypdf
