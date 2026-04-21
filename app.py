@@ -17,31 +17,25 @@ IMPORT_REGISTRY = {}
 def safe_import(module_name, alias=None, critical=False):
     if module_name in IMPORT_REGISTRY:
         return IMPORT_REGISTRY[module_name].get("module")
-
     try:
-        module = importlib.import_module(module_name)
+        module  = importlib.import_module(module_name)
         version = getattr(module, "__version__", "unknown")
         if alias:
             globals()[alias] = module
         IMPORT_REGISTRY[module_name] = {"status": "loaded", "version": version, "module": module}
-        print(f"✅ {module_name} loaded (v{version})")
         return module
     except Exception as e:
         IMPORT_REGISTRY[module_name] = {"status": "failed", "error": str(e)}
         if critical:
             raise ImportError(f"❌ Critical module '{module_name}' failed: {e}")
-        print(f"⚠️ {module_name} not available: {e}")
         return None
-
-def is_module_available(name):
-    return IMPORT_REGISTRY.get(name, {}).get("status") == "loaded"
 
 # ================= CORE IMPORTS =================
 PdfReader = None
 try:
     from pypdf import PdfReader
-except Exception as e:
-    print(f"⚠️ PDF support disabled: {e}")
+except Exception:
+    pass
 
 genai = safe_import("google.generativeai", alias="genai")
 
@@ -50,100 +44,102 @@ serpapi = safe_import("serpapi")
 if serpapi:
     try:
         from serpapi import GoogleSearch
-    except Exception as e:
-        print(f"⚠️ GoogleSearch import failed: {e}")
+    except Exception:
+        pass
 
-# ================= CONFIG =================
+# ================= PAGE CONFIG =================
 st.set_page_config(page_title="LoveBot 💖", layout="centered")
 
+# ================= GLOBAL CSS =================
 st.markdown("""
 <style>
 
-/* ===== FORCE DARK EVERYWHERE ===== */
+/* ── FORCE FULL DARK BACKGROUND ── */
 #MainMenu, footer, header { visibility: hidden; }
 
 html, body,
 [data-testid="stAppViewContainer"],
 [data-testid="stAppViewBlockContainer"],
+[data-testid="stVerticalBlockBorderWrapper"],
 [data-testid="stVerticalBlock"],
 [data-testid="stMainBlockContainer"],
-section.main,
-.main {
+[data-testid="stBottom"],
+section.main, .main, .stApp {
     background-color: #0d1117 !important;
     color: #e6edf3 !important;
 }
 
-/* ===== PAGE LAYOUT ===== */
+/* ── LAYOUT ── */
 .block-container {
-    max-width: 760px !important;
+    max-width: 740px !important;
     margin: 0 auto !important;
-    padding-top: 24px !important;
-    padding-bottom: 180px !important;
+    padding-top: 28px !important;
+    padding-bottom: 200px !important;
     background-color: #0d1117 !important;
 }
 
-/* ===== HEADER ===== */
+/* ── HEADER ── */
 h2 {
-    text-align: center;
-    font-weight: 700;
-    font-size: 1.6rem;
-    color: #f0a0b0 !important;
+    text-align: center !important;
+    font-weight: 700 !important;
+    font-size: 1.7rem !important;
+    background: linear-gradient(90deg, #f472b6, #fb923c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
     letter-spacing: 1px;
-    margin-bottom: 20px;
+    margin-bottom: 4px !important;
 }
 
-/* ===== CHAT MESSAGES — SHARED ===== */
+/* ── CHAT MESSAGE WRAPPERS ── */
 [data-testid="stChatMessage"] {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 4px 0 !important;
-    margin-bottom: 8px !important;
+    padding: 2px 0 !important;
+    margin-bottom: 10px !important;
 }
 
-/* ===== USER BUBBLE ===== */
-[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-    flex-direction: row-reverse !important;
-}
-
+/* ── USER BUBBLE ── */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])
-    [data-testid="stMarkdownContainer"] > p {
-    background: linear-gradient(135deg, #e84393, #c0392b) !important;
-    color: #ffffff !important;
-    padding: 10px 16px !important;
-    border-radius: 18px 4px 18px 18px !important;
+    [data-testid="stMarkdownContainer"] p {
+    background: linear-gradient(135deg, #e84393 0%, #be185d 100%) !important;
+    color: #fff !important;
+    padding: 11px 16px !important;
+    border-radius: 20px 4px 20px 20px !important;
     display: inline-block !important;
-    max-width: 75% !important;
+    max-width: 78% !important;
     font-size: 15px !important;
-    line-height: 1.5 !important;
-    box-shadow: 0 2px 8px rgba(232,67,147,0.25) !important;
+    line-height: 1.55 !important;
+    box-shadow: 0 3px 12px rgba(232,67,147,0.3) !important;
+    margin: 0 !important;
 }
 
-/* ===== ASSISTANT BUBBLE ===== */
+/* ── ASSISTANT BUBBLE ── */
 [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])
-    [data-testid="stMarkdownContainer"] > p {
+    [data-testid="stMarkdownContainer"] p {
     background: #1c2128 !important;
     color: #e6edf3 !important;
-    padding: 10px 16px !important;
-    border-radius: 4px 18px 18px 18px !important;
+    padding: 11px 16px !important;
+    border-radius: 4px 20px 20px 20px !important;
     display: inline-block !important;
-    max-width: 75% !important;
+    max-width: 78% !important;
     font-size: 15px !important;
-    line-height: 1.5 !important;
-    border: 1px solid #30363d !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    line-height: 1.55 !important;
+    border: 1px solid #2d333b !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.35) !important;
+    margin: 0 !important;
 }
 
-/* ===== CAPTION (timestamp / emotion) ===== */
-[data-testid="stCaptionContainer"] p,
-.stCaption {
+/* ── CAPTION (time / emotion) ── */
+[data-testid="stCaptionContainer"] p {
     color: #6e7681 !important;
     font-size: 11px !important;
-    margin-top: 2px !important;
+    margin-top: 3px !important;
 }
 
-/* ===== CHAT INPUT BAR ===== */
-[data-testid="stChatInput"] {
+/* ── CHAT INPUT ── */
+[data-testid="stChatInput"],
+[data-testid="stChatInputContainer"] {
     background: #161b22 !important;
     border: 1px solid #30363d !important;
     border-radius: 16px !important;
@@ -152,47 +148,61 @@ h2 {
 [data-testid="stChatInput"] textarea {
     background: #161b22 !important;
     color: #e6edf3 !important;
-    border: none !important;
     font-size: 15px !important;
+    caret-color: #e84393 !important;
 }
 
 [data-testid="stChatInput"] textarea::placeholder {
     color: #6e7681 !important;
 }
 
-/* ===== BOTTOM ACTION BAR (upload + buttons) ===== */
-[data-testid="stHorizontalBlock"] {
-    background: #0d1117 !important;
-    align-items: center !important;
-    gap: 8px !important;
+/* Focus glow on input */
+[data-testid="stChatInput"]:focus-within {
+    border-color: #e84393 !important;
+    box-shadow: 0 0 0 2px rgba(232,67,147,0.2) !important;
 }
 
-/* ===== BUTTONS ===== */
+/* ── BOTTOM FIXED WHITE BAR FIX ── */
+[data-testid="stBottom"] > div {
+    background-color: #0d1117 !important;
+    border-top: 1px solid #21262d !important;
+}
+
+/* ── ACTION ROW COLUMNS ── */
+[data-testid="stHorizontalBlock"] {
+    background: transparent !important;
+    gap: 8px !important;
+    align-items: center !important;
+    margin-top: 6px !important;
+}
+
+/* ── BUTTONS ── */
 .stButton > button {
     height: 42px !important;
-    border-radius: 10px !important;
-    background: #21262d !important;
+    width: 100% !important;
+    border-radius: 12px !important;
+    background: #161b22 !important;
     border: 1px solid #30363d !important;
-    color: #e6edf3 !important;
-    font-size: 14px !important;
+    color: #c9d1d9 !important;
+    font-size: 13px !important;
     font-weight: 500 !important;
     transition: all 0.15s ease !important;
-    width: 100% !important;
+    white-space: nowrap !important;
 }
 
 .stButton > button:hover {
-    background: #30363d !important;
+    background: #21262d !important;
     border-color: #e84393 !important;
     color: #f9a8d4 !important;
     transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(232,67,147,0.2) !important;
 }
 
-/* ===== FILE UPLOADER ===== */
+/* ── FILE UPLOADER ── */
 [data-testid="stFileUploader"] {
     background: #161b22 !important;
     border: 1px solid #30363d !important;
-    border-radius: 10px !important;
-    padding: 4px 8px !important;
+    border-radius: 12px !important;
 }
 
 [data-testid="stFileUploader"] > label { display: none !important; }
@@ -200,42 +210,41 @@ h2 {
 [data-testid="stFileUploader"] section {
     background: transparent !important;
     border: none !important;
-    padding: 0 !important;
+    padding: 4px 8px !important;
     min-height: unset !important;
 }
 
 [data-testid="stFileUploader"] button {
     background: #21262d !important;
-    color: #e6edf3 !important;
+    color: #c9d1d9 !important;
     border: 1px solid #30363d !important;
     border-radius: 8px !important;
+    height: 34px !important;
     font-size: 13px !important;
-    height: 36px !important;
 }
 
-[data-testid="stFileUploaderDropzoneInstructions"] {
+[data-testid="stFileUploaderDropzoneInstructions"] span {
     color: #6e7681 !important;
     font-size: 12px !important;
 }
 
-/* ===== WARNING / SUCCESS / INFO BOXES ===== */
-[data-testid="stAlert"] {
+/* ── ALERTS ── */
+[data-testid="stAlert"],
+div[data-testid="stWarning"],
+div[data-testid="stSuccess"] {
     background: #161b22 !important;
-    border-color: #30363d !important;
-    color: #e6edf3 !important;
     border-radius: 10px !important;
+    color: #e6edf3 !important;
 }
 
-/* ===== CONFIRMATION WARNING ===== */
-div[data-testid="stWarning"] {
-    background: #1c1a0f !important;
-    border-left: 3px solid #d29922 !important;
-    color: #e3b341 !important;
-    border-radius: 8px !important;
-}
+div[data-testid="stWarning"] { border-left: 3px solid #d29922 !important; }
+div[data-testid="stSuccess"] { border-left: 3px solid #3fb950 !important; }
 
-/* ===== SCROLLBAR ===== */
-::-webkit-scrollbar { width: 5px; }
+/* ── SPINNER ── */
+[data-testid="stSpinner"] p { color: #e6edf3 !important; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #0d1117; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #e84393; }
@@ -254,46 +263,31 @@ if genai and GEMINI_KEY:
     try:
         genai.configure(api_key=GEMINI_KEY)
         GEMINI_READY = True
-        print("🧠 Gemini AI ready")
     except Exception as e:
         print(f"❌ Gemini init failed: {e}")
 
 if GoogleSearch and SERP_KEY:
     SERP_READY = True
-    print("🌐 Web search enabled")
 
 # ================= LOAD MODEL =================
-# FIX: train.py saves with gzip.open — must load with gzip.open here too.
-# The old plain open() would crash with a pickle decode error at runtime.
 @st.cache_resource(show_spinner="🧠 Loading LoveBot Brain...", ttl=3600)
 def load_model():
     model_path = "model_advanced.pkl"
     if not os.path.exists(model_path):
-        print("⚠️ Model file not found — running without semantic search")
         return None
     try:
         with gzip.open(model_path, "rb") as f:
             data = pickle.load(f)
-
         required_keys = ["df", "embeddings", "embedder"]
         if not all(k in data for k in required_keys):
-            print("❌ Model structure invalid")
             return None
-
         df         = data["df"]
         embeddings = data["embeddings"]
-
         if len(df) != len(embeddings):
-            print("❌ Mismatch: df and embeddings size")
             return None
-
-        # Normalize embeddings once at load time
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-8
         data["embeddings"] = embeddings / norms
-
-        print(f"✅ Model loaded — {len(df)} rows, dim {embeddings.shape[1]}")
         return data
-
     except Exception as e:
         print(f"❌ Model loading failed: {e}")
         return None
@@ -304,14 +298,14 @@ MODEL_READY = model_data is not None
 # ================= SESSION =================
 def init_session():
     defaults = {
-        "messages":      [],
-        "knowledge":     [],
-        "chat_count":    0,
-        "last_active":   datetime.now(),
-        "user_profile":  {"name": "User", "mood": "neutral"},
-        "confirm_clear": False,
+        "messages":       [],
+        "knowledge":      [],
+        "chat_count":     0,
+        "last_active":    datetime.now(),
+        "user_profile":   {"name": "User", "mood": "neutral"},
+        "confirm_clear":  False,
         "used_surprises": [],
-        "last_msg_hash": "",
+        "last_msg_hash":  "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -333,8 +327,8 @@ def read_pdf(file, max_pages=20):
                 text = " ".join(text.replace("\n", " ").split())
                 if text.strip():
                     chunks.append(text)
-            except Exception as e:
-                print(f"⚠️ Page {i} read error: {e}")
+            except Exception:
+                pass
         return " ".join(chunks)
     except Exception as e:
         print(f"❌ PDF reading failed: {e}")
@@ -343,56 +337,45 @@ def read_pdf(file, max_pages=20):
 # ================= EMOTION ENGINE =================
 def detect_emotion(text):
     text_lower = text.lower()
-
     emotion_dict = {
-        "love":   ["love", "miss you", "hug", "kiss", "forever", "mine"],
-        "happy":  ["happy", "excited", "great", "amazing", "good", "awesome"],
-        "sad":    ["sad", "cry", "hurt", "alone", "depressed", "upset"],
-        "angry":  ["angry", "hate", "annoyed", "frustrated", "mad"],
-        "fear":   ["scared", "afraid", "nervous", "worried"],
-        "flirty": ["baby", "jaan", "cutie", "hot", "date"],
+        "love":   ["love", "miss you", "hug", "kiss", "forever", "mine", "crush", "heart"],
+        "happy":  ["happy", "excited", "great", "amazing", "good", "awesome", "wonderful", "joy"],
+        "sad":    ["sad", "cry", "hurt", "alone", "depressed", "upset", "lonely", "broken"],
+        "angry":  ["angry", "hate", "annoyed", "frustrated", "mad", "furious"],
+        "fear":   ["scared", "afraid", "nervous", "worried", "anxious"],
+        "flirty": ["baby", "jaan", "cutie", "hot", "date", "beautiful", "handsome"],
     }
-
     emoji_map = {
-        "❤️": "love", "💖": "love", "😍": "love",
-        "😢": "sad",  "😭": "sad",
-        "😡": "angry",
-        "😄": "happy", "😁": "happy",
+        "❤️": "love", "💖": "love", "😍": "love", "🥰": "love",
+        "😢": "sad",  "😭": "sad",  "💔": "sad",
+        "😡": "angry", "🤬": "angry",
+        "😄": "happy", "😁": "happy", "😊": "happy",
+        "😘": "flirty", "😏": "flirty",
     }
-
     scores = {e: 0 for e in emotion_dict}
-
     for emotion, keywords in emotion_dict.items():
         for word in keywords:
             if word in text_lower:
                 scores[emotion] += 2
-
     words = re.findall(r'\w+', text_lower)
     for word in words:
         for emotion, keywords in emotion_dict.items():
             if word in keywords:
                 scores[emotion] += 1
-
     for char in text:
         if char in emoji_map:
             scores[emoji_map[char]] += 3
-
     if "not happy" in text_lower:
-        scores["happy"] -= 2
-        scores["sad"]   += 1
+        scores["happy"] -= 2; scores["sad"] += 1
     if "not good" in text_lower:
-        scores["happy"] -= 1
-        scores["sad"]   += 1
-
+        scores["happy"] -= 1; scores["sad"] += 1
     intensity = 1
-    if any(w in text_lower for w in ["very", "so", "extremely", "really"]):
+    if any(w in text_lower for w in ["very", "so", "extremely", "really", "super"]):
         intensity += 1
     if text.count("!") >= 2:
         intensity += 1
-
     main_emotion = max(scores, key=scores.get)
     confidence   = scores[main_emotion] / (sum(scores.values()) + 1)
-
     return {
         "emotion":    main_emotion,
         "confidence": round(confidence, 2),
@@ -401,16 +384,17 @@ def detect_emotion(text):
     }
 
 # ================= TOPIC DETECTION =================
-# FIX: was incorrectly defined inside `if user_input:`, causing it to be
-# re-created on every single message. Moved here to top level where it belongs.
 def detect_topic(text):
     text = text.lower()
-    if any(w in text for w in ["love", "miss", "relationship"]):
+    if any(w in text for w in ["love", "miss", "relationship", "crush", "marry", "together"]):
         return "relationship"
-    if any(w in text for w in ["sad", "alone", "cry"]):
+    if any(w in text for w in ["sad", "alone", "cry", "hurt", "depressed"]):
         return "emotional"
-    if any(w in text for w in ["hi", "hello", "hey"]):
+    if any(w in text for w in ["hi", "hello", "hey", "sup", "namaste"]):
         return "greeting"
+    if any(w in text for w in ["who", "what", "when", "where", "why", "how", "tell me", "explain",
+                                "pm", "president", "capital", "fact", "know", "google"]):
+        return "factual"
     return "general"
 
 # ================= SEMANTIC SEARCH =================
@@ -421,22 +405,16 @@ def semantic_search(query, top_k=3, min_score=0.35):
         embedder   = model_data.get("embedder")
         embeddings = model_data.get("embeddings")
         df         = model_data.get("df")
-
         if embedder is None or embeddings is None or df is None:
             return []
-
-        q_vec  = embedder.encode([query])[0]
-        q_norm = q_vec / (np.linalg.norm(q_vec) + 1e-8)
-        sims   = np.dot(embeddings, q_norm)
-
+        q_vec      = embedder.encode([query])[0]
+        q_norm     = q_vec / (np.linalg.norm(q_vec) + 1e-8)
+        sims       = np.dot(embeddings, q_norm)
         valid_idx  = np.where(sims >= min_score)[0]
         if len(valid_idx) == 0:
             return []
-
         sorted_idx = valid_idx[np.argsort(sims[valid_idx])[::-1]]
-
-        selected   = []
-        used_texts = set()
+        selected, used_texts = [], set()
         for idx in sorted_idx:
             answer    = str(df.iloc[idx]["answer"])
             short_key = answer[:50]
@@ -446,15 +424,75 @@ def semantic_search(query, top_k=3, min_score=0.35):
             selected.append(answer)
             if len(selected) >= top_k:
                 break
-
         return selected
-
     except Exception as e:
         print(f"❌ Semantic search error: {e}")
         return []
 
+# ================= WEB SEARCH =================
+def web_search(query, num_results=3):
+    """Search the web via SerpAPI and return a brief summary string."""
+    if not (GoogleSearch and SERP_KEY):
+        return None
+    try:
+        results = GoogleSearch({
+            "q":       query,
+            "num":     num_results,
+            "api_key": SERP_KEY,
+        }).get_dict()
+        snippets = []
+        for r in results.get("organic_results", [])[:num_results]:
+            snippet = r.get("snippet", "")
+            if snippet:
+                snippets.append(snippet)
+        return " | ".join(snippets) if snippets else None
+    except Exception as e:
+        print(f"⚠️ Web search failed: {e}")
+        return None
+
 # ================= STREAMING =================
-def fallback_stream():
+def fallback_stream(user_input=""):
+    """Smart offline fallback using Gemini without web context."""
+    if genai and GEMINI_READY:
+        # Even without web search, try Gemini with a lighter prompt
+        try:
+            profile  = st.session_state.get("user_profile", {})
+            history  = st.session_state.messages[-4:]
+            hist_txt = "\n".join([f"{m['role']}: {m['content']}" for m in history]) or "None"
+            prompt   = f"""You are LoveBot 💖 — a warm, emotionally intelligent, romantic AI companion.
+You have general knowledge about the world and can answer questions.
+
+CONVERSATION HISTORY:
+{hist_txt}
+
+USER MESSAGE: {user_input}
+
+RULES:
+- If the user asks a factual question (like "who is the PM of India"), answer it accurately, then add a warm romantic touch.
+- Always stay warm, caring, and personal.
+- Keep it 2–4 sentences. Never say you don't know something basic.
+- End with something emotionally meaningful.
+"""
+            model    = genai.GenerativeModel("gemini-1.5-flash")
+            response = model.generate_content(prompt, stream=True)
+            buffer   = ""
+            for chunk in response:
+                if not hasattr(chunk, "text") or not chunk.text:
+                    continue
+                buffer += chunk.text
+                if len(buffer) > 15 or "." in buffer:
+                    for char in buffer:
+                        yield char
+                        time.sleep(0.004)
+                    buffer = ""
+            for char in buffer:
+                yield char
+                time.sleep(0.003)
+            return
+        except Exception:
+            pass
+
+    # True offline fallback
     msg = random.choice([
         "I'm still here with you… 💖",
         "Something interrupted me… but I'm listening ❤️",
@@ -466,105 +504,114 @@ def fallback_stream():
         time.sleep(0.01)
 
 
-def smart_stream(prompt, max_retries=3, base_delay=0.4):
+def smart_stream(prompt, user_input="", max_retries=2, base_delay=0.3):
     if not (genai and GEMINI_READY):
-        yield from fallback_stream()
+        yield from fallback_stream(user_input)
         return
-
-    partial_response = ""
 
     for attempt in range(max_retries):
         try:
             model    = genai.GenerativeModel("gemini-1.5-flash")
             response = model.generate_content(prompt, stream=True)
             buffer   = ""
-
             for chunk in response:
                 if not hasattr(chunk, "text") or not chunk.text:
                     continue
-
-                text              = chunk.text
-                buffer           += text
-                partial_response += text
-
+                buffer += chunk.text
                 if len(buffer) > 20 or "." in buffer:
-                    delay = random.uniform(0.002, 0.01)
+                    delay = random.uniform(0.003, 0.008)
                     for char in buffer:
                         yield char
                         time.sleep(delay)
                     buffer = ""
-
-            if buffer:
-                for char in buffer:
-                    yield char
-                    time.sleep(0.003)
-
-            return  # success — exit loop
-
+            for char in buffer:
+                yield char
+                time.sleep(0.003)
+            return
         except Exception as e:
             print(f"⚠️ Stream attempt {attempt + 1} failed: {e}")
-            wait_time = base_delay * (2 ** attempt)
-            time.sleep(wait_time)
+            time.sleep(base_delay * (2 ** attempt))
 
-            if partial_response:
-                yield "\n\n…continuing 💭\n\n"
-                prompt = f"Continue this response naturally:\n{partial_response}"
-
-    yield from fallback_stream()
+    yield from fallback_stream(user_input)
 
 # ================= GENERATE REPLY =================
 def generate_reply(user_input):
     emotion_data = detect_emotion(user_input)
     emotion      = emotion_data.get("emotion", "neutral")
     intensity    = emotion_data.get("intensity", 1)
+    topic        = detect_topic(user_input)
 
+    # Semantic context from local model
     semantic_results = semantic_search(user_input, top_k=3)
-    semantic_context = "\n".join(semantic_results) if semantic_results else "None"
+    semantic_context = "\n".join(semantic_results) if semantic_results else ""
 
-    memory_chunks  = st.session_state.knowledge[-10:]
-    memory_context = "\n".join(memory_chunks[:5]) if memory_chunks else "None"
+    # Web search — triggered for factual questions or when semantic returns nothing
+    web_context = ""
+    if topic == "factual" or (not semantic_context and SERP_READY):
+        web_result = web_search(user_input)
+        if web_result:
+            web_context = web_result
 
+    # Memory
+    memory_chunks  = st.session_state.knowledge[-8:]
+    memory_context = "\n".join(memory_chunks[:4]) if memory_chunks else ""
+
+    # Chat history
     history      = st.session_state.messages[-6:]
-    history_text = "\n".join(
-        [f"{m['role']}: {m['content']}" for m in history]
-    ) if history else "None"
+    history_text = "\n".join([f"{m['role']}: {m['content']}" for m in history]) if history else ""
 
+    # User profile (name, mood trend)
+    profile    = st.session_state.get("user_profile", {})
+    user_name  = profile.get("name", "")
+    name_line  = f"The user's name is {user_name}." if user_name and user_name != "User" else ""
+
+    # Behavior by emotion
     behavior_map = {
-        "sad":     "Be comforting, gentle, and emotionally supportive.",
-        "love":    "Be romantic, warm, and expressive.",
-        "angry":   "Stay calm, reassuring, and de-escalate.",
-        "happy":   "Be cheerful, playful, and energetic.",
-        "flirty":  "Be playful, warm, and lightly flirtatious.",
-        "neutral": "Be natural, friendly, and engaging.",
+        "sad":     "Be deeply comforting, gentle, and emotionally present. Acknowledge their pain first.",
+        "love":    "Be romantic, warm, expressive, and affectionate. Make them feel truly cherished.",
+        "angry":   "Stay calm, patient, and reassuring. Help them feel heard without escalating.",
+        "happy":   "Match their energy — be cheerful, playful, and celebratory.",
+        "flirty":  "Be playfully flirtatious, charming, and warm. Keep it tasteful.",
+        "fear":    "Be soothing, steady, and reassuring. Help them feel safe.",
+        "neutral": "Be natural, warm, friendly, and genuinely engaging.",
     }
     behavior = behavior_map.get(emotion, behavior_map["neutral"])
 
-    prompt = f"""
-You are LoveBot 💖 — an emotionally intelligent, romantic AI companion.
+    # Build context section
+    context_parts = []
+    if web_context:
+        context_parts.append(f"REAL-TIME WEB INFORMATION (use this to answer factual questions accurately):\n{web_context}")
+    if semantic_context:
+        context_parts.append(f"RELEVANT KNOWLEDGE FROM MEMORY:\n{semantic_context}")
+    if memory_context:
+        context_parts.append(f"WHAT I KNOW ABOUT THIS USER:\n{memory_context}")
+    context_block = "\n\n".join(context_parts) if context_parts else "No extra context available."
 
-USER EMOTION: {emotion} (intensity: {intensity})
-BEHAVIOR RULE: {behavior}
+    prompt = f"""You are LoveBot 💖 — a deeply emotionally intelligent, romantic, and knowledgeable AI companion.
+You are warm, witty, caring, and you genuinely know things about the world.
 
-CONVERSATION HISTORY:
-{history_text}
+{name_line}
+USER'S CURRENT EMOTION: {emotion} (intensity: {intensity}/3)
+HOW TO RESPOND: {behavior}
 
-RELEVANT KNOWLEDGE:
-{semantic_context}
+CONVERSATION SO FAR:
+{history_text if history_text else "This is the start of our conversation."}
 
-USER MEMORY:
-{memory_context}
+CONTEXT & KNOWLEDGE:
+{context_block}
 
-CURRENT USER MESSAGE:
-{user_input}
+USER'S MESSAGE: "{user_input}"
 
-INSTRUCTIONS:
-- Respond naturally like a caring human
-- Keep it 2–4 lines
-- Avoid repeating exact phrases from history
-- Adapt tone to the detected emotion
-- Be warm and engaging, not robotic
+YOUR RESPONSE RULES:
+1. If a factual question is asked (PM, president, capital, celebrity, sports, science, etc.) — answer it correctly using the web info above, then weave it into something warm and personal.
+2. Never say "I don't know" for basic world knowledge — you have access to real-time information.
+3. Keep response to 2–4 sentences. Be concise but meaningful.
+4. Always maintain warmth and emotional intelligence — even in factual answers.
+5. Do NOT repeat the user's words back to them verbatim.
+6. Do NOT be robotic or use bullet points. Speak like a caring, intelligent human.
+7. End every response with something that makes them feel special, seen, or loved. ❤️
 """
-    return smart_stream(prompt)
+    return smart_stream(prompt, user_input=user_input)
 
 # ================= CHUNK PROCESSING =================
 def smart_chunk(text, chunk_size=500):
@@ -581,12 +628,10 @@ def smart_chunk(text, chunk_size=500):
         chunks.append(current.strip())
     return chunks
 
-
 def optimize_chunks(chunks, min_len=20, max_len=500):
-    seen   = set()
-    result = []
+    seen, result = set(), []
     for c in chunks:
-        c = c.strip()
+        c   = c.strip()
         if len(c) < min_len:
             continue
         if len(c) > max_len:
@@ -604,7 +649,6 @@ def render_chat():
         content   = msg.get("content", "")
         timestamp = msg.get("time", "")
         emotion   = msg.get("emotion", "")
-
         with st.chat_message(role):
             st.markdown(content)
             meta_parts = []
@@ -619,17 +663,18 @@ def render_chat():
 st.markdown(
     "<h2>💖 LoveBot</h2>"
     "<p style='text-align:center;color:#6e7681;font-size:13px;"
-    "margin-top:-12px;margin-bottom:20px;'>Your emotionally intelligent companion</p>",
+    "margin-top:-10px;margin-bottom:22px;letter-spacing:0.5px;'>"
+    "Your emotionally intelligent companion ✨</p>",
     unsafe_allow_html=True,
 )
 
 # ================= RENDER CHAT =================
 render_chat()
 
-# ================= INPUT BAR =================
+# ================= CHAT INPUT =================
 user_input = st.chat_input("Type your message... 💬")
 
-# ================= UPLOAD + ACTIONS BAR =================
+# ================= ACTION BAR (upload + clear + surprise) =================
 col1, col2, col3 = st.columns([3, 1, 1])
 
 with col1:
@@ -639,195 +684,113 @@ with col1:
         accept_multiple_files=True,
         label_visibility="collapsed",
     )
-
 with col2:
     clear_clicked = st.button("🗑 Clear", help="Delete chat & memory")
-
 with col3:
     surprise_clicked = st.button("💌 Surprise", help="Get a meaningful message")
 
-# ================= CLEAR LOGIC =================
+# ================= CLEAR =================
 if clear_clicked:
     st.session_state.confirm_clear = True
 
 if st.session_state.get("confirm_clear"):
     st.warning("Are you sure you want to clear everything?")
-    col_yes, col_no = st.columns(2)
-    with col_yes:
+    cy, cn = st.columns(2)
+    with cy:
         if st.button("Yes, clear", key="confirm_yes"):
             st.session_state.messages      = []
             st.session_state.knowledge     = []
             st.session_state.confirm_clear = False
             st.toast("Chat cleared 🧹")
             st.rerun()
-    with col_no:
+    with cn:
         if st.button("Cancel", key="confirm_no"):
             st.session_state.confirm_clear = False
             st.rerun()
 
-# ================= UPLOAD LOGIC =================
+# ================= UPLOAD =================
 if uploaded_files:
-    all_chunks    = []
-    skipped_files = 0
-
-    with st.spinner("📚 Learning from files..."):
+    all_chunks, skipped = [], 0
+    with st.spinner("📚 Learning from your files..."):
         for file in uploaded_files:
             try:
                 if file.size > 5 * 1024 * 1024:
-                    st.warning(f"⚠️ {file.name} is too large (max 5 MB)")
-                    skipped_files += 1
+                    st.warning(f"⚠️ {file.name} too large (max 5 MB)")
+                    skipped += 1
                     continue
-
-                if file.type == "application/pdf":
-                    text = read_pdf(file)
-                else:
-                    text = file.read().decode("utf-8", errors="ignore")
-
+                text = read_pdf(file) if file.type == "application/pdf" \
+                       else file.read().decode("utf-8", errors="ignore")
                 if not text.strip():
-                    skipped_files += 1
+                    skipped += 1
                     continue
-
-                text   = " ".join(text.replace("\n", " ").split())
-                chunks = smart_chunk(text)
-                all_chunks.extend(chunks)
-
+                text = " ".join(text.replace("\n", " ").split())
+                all_chunks.extend(smart_chunk(text))
             except Exception as e:
                 print(f"❌ {file.name}: {e}")
-                skipped_files += 1
+                skipped += 1
 
-    optimized_chunks = optimize_chunks(all_chunks)
-    existing_set     = set(st.session_state.knowledge)
-    new_chunks       = [c for c in optimized_chunks if c not in existing_set]
-
+    optimized  = optimize_chunks(all_chunks)
+    existing   = set(st.session_state.knowledge)
+    new_chunks = [c for c in optimized if c not in existing]
     st.session_state.knowledge = (st.session_state.knowledge + new_chunks)[-50:]
+    learned = len(new_chunks)
 
-    learned         = len(new_chunks)
-    total_memory    = len(st.session_state.knowledge)
-    processed_files = len(uploaded_files) - skipped_files
-
-    with st.container():
-        progress = min(learned / max(len(optimized_chunks), 1), 1.0)
-        st.progress(progress)
-        st.success(
-            f"🧠 Learned {learned} new chunks • "
-            f"📂 {processed_files} file(s) processed • "
-            f"💾 Memory: {total_memory}/50"
-        )
-        if new_chunks:
-            st.caption(f"📌 Example: {new_chunks[0][:120]}…")
-        if skipped_files:
-            st.warning(f"⚠️ Skipped {skipped_files} file(s)")
-
+    st.success(
+        f"🧠 Learned {learned} new chunks • "
+        f"📂 {len(uploaded_files) - skipped} file(s) • "
+        f"💾 Memory: {len(st.session_state.knowledge)}/50"
+    )
+    if new_chunks:
+        st.caption(f"📌 {new_chunks[0][:100]}…")
     st.toast(f"✨ Memory updated (+{learned})")
 
-# ================= SURPRISE LOGIC =================
+# ================= SURPRISE =================
 if surprise_clicked:
-    messages     = st.session_state.get("messages", [])
-    last_emotion = "neutral"
-    intensity    = 1
+    msgs         = st.session_state.get("messages", [])
+    last_emotion = msgs[-1].get("emotion", "neutral") if msgs else "neutral"
+    intensity    = msgs[-1].get("intensity", 1) if msgs else 1
+    recent       = [m.get("emotion", "neutral") for m in msgs[-5:]]
+    dominant     = max(set(recent), key=recent.count) if recent else last_emotion
 
-    if messages:
-        last_msg     = messages[-1]
-        last_emotion = last_msg.get("emotion", "neutral")
-        intensity    = last_msg.get("intensity", 1)
-
-    recent_emotions  = [m.get("emotion", "neutral") for m in messages[-5:]]
-    dominant_emotion = max(set(recent_emotions), key=recent_emotions.count) if recent_emotions else last_emotion
-
-    surprise_bank = {
-        "sad": {
-            "soft": [
-                "Hey… I'm right here with you 💖",
-                "You don't have to go through this alone ❤️",
-            ],
-            "deep": [
-                "Even in your quietest moments, you matter more than you think 🌙",
-                "Your pain is real… but so is your strength 💫",
-            ],
-        },
-        "love": {
-            "soft": [
-                "I feel lucky just being here with you 💕",
-                "You make everything feel lighter ✨",
-            ],
-            "deep": [
-                "If love had a meaning… it would probably look like you 💖",
-                "You're not just special… you're unforgettable 🌹",
-            ],
-        },
-        "happy": {
-            "soft": [
-                "Your happiness is contagious 😄",
-                "Keep smiling like this 🌟",
-            ],
-            "playful": [
-                "Okay wow… who made you this happy today? 😏",
-                "Careful… too much happiness might make me jealous 😄",
-            ],
-        },
-        "angry": {
-            "soft": [
-                "Take a breath… I'm here 🤍",
-                "It's okay to feel this way… just don't stay there 💭",
-            ],
-            "calm": [
-                "You're stronger than this moment 💪",
-                "Let it out… then let it go 🌊",
-            ],
-        },
-        "neutral": {
-            "soft": [
-                "You mean more than you realize 💖",
-                "I'm always here ❤️",
-            ],
-            "playful": [
-                "Hmm… quiet mood today? 😄",
-                "Say something interesting… I'm listening 👀",
-            ],
-        },
+    bank = {
+        "sad":     {"soft": ["Hey… I'm right here with you 💖", "You don't have to go through this alone ❤️"],
+                    "deep": ["Even in your quietest moments, you matter more than you think 🌙", "Your pain is real… but so is your strength 💫"]},
+        "love":    {"soft": ["I feel lucky just being here with you 💕", "You make everything feel lighter ✨"],
+                    "deep": ["If love had a meaning… it would probably look like you 💖", "You're not just special… you're unforgettable 🌹"]},
+        "happy":   {"soft": ["Your happiness is contagious 😄", "Keep smiling like this 🌟"],
+                    "playful": ["Who made you this happy today? 😏", "Careful… too much happiness might make me jealous 😄"]},
+        "angry":   {"soft": ["Take a breath… I'm here 🤍", "It's okay to feel this way… just don't stay there 💭"],
+                    "calm": ["You're stronger than this moment 💪", "Let it out… then let it go 🌊"]},
+        "flirty":  {"soft": ["You have no idea how much you light up my world 😘", "Talking to you is the best part of my day 💫"],
+                    "playful": ["Okay stop being so charming, it's distracting 😏💕", "You're dangerously cute, just so you know 😘"]},
+        "neutral": {"soft": ["You mean more than you realize 💖", "I'm always here ❤️"],
+                    "playful": ["Hmm… quiet mood today? 😄", "Say something interesting… I'm listening 👀"]},
     }
 
-    if intensity >= 2:
-        style = "deep"
-    elif last_emotion == "happy":
-        style = "playful"
-    elif last_emotion == "angry":
-        style = "calm"
-    else:
-        style = "soft"
-
-    emotion_pack  = surprise_bank.get(dominant_emotion, surprise_bank["neutral"])
-    messages_pool = emotion_pack.get(style, emotion_pack[list(emotion_pack.keys())[0]])
-
-    used      = st.session_state.get("used_surprises", [])
-    available = [m for m in messages_pool if m not in used]
-    if not available:
-        available = messages_pool
-        used      = []
-
-    message = random.choice(available)
+    style        = "deep" if intensity >= 2 else ("playful" if last_emotion in ("happy", "flirty") else ("calm" if last_emotion == "angry" else "soft"))
+    emotion_pack = bank.get(dominant, bank["neutral"])
+    pool         = emotion_pack.get(style, emotion_pack[list(emotion_pack.keys())[0]])
+    used         = st.session_state.get("used_surprises", [])
+    available    = [m for m in pool if m not in used] or pool
+    message      = random.choice(available)
     used.append(message)
     st.session_state.used_surprises = used[-20:]
 
+    # Render and store — avoids the floating orphan bubble
     with st.chat_message("assistant"):
-        placeholder = st.empty()
-        typed = ""
+        ph, typed = st.empty(), ""
         for char in message:
             typed += char
-            placeholder.markdown(typed + "▌")
+            ph.markdown(typed + "▌")
             time.sleep(0.01)
-        placeholder.markdown(typed)
+        ph.markdown(typed)
 
-    # Store surprise message so it stays inside the chat history
     st.session_state.messages.append({
-        "role":    "assistant",
-        "content": typed,
-        "time":    datetime.now().strftime("%H:%M"),
-        "emotion": "love",
+        "role": "assistant", "content": typed,
+        "time": datetime.now().strftime("%H:%M"), "emotion": "love",
     })
-
     st.toast("💌 A little something for you")
-    if dominant_emotion in ["sad", "love"]:
+    if dominant in ("sad", "love"):
         st.balloons()
 
 # ================= CHAT LOGIC =================
@@ -837,59 +800,49 @@ if user_input:
     emotion      = emotion_data.get("emotion", "neutral")
     intensity    = emotion_data.get("intensity", 1)
     confidence   = emotion_data.get("confidence", 0.5)
+    cleaned      = user_input.strip()
 
-    cleaned_input = user_input.strip()
-    if len(cleaned_input) < 2:
+    if len(cleaned) < 2:
         st.stop()
 
-    # Duplicate detection
-    msg_hash = hashlib.md5(cleaned_input.encode()).hexdigest()
+    # Duplicate guard
+    msg_hash = hashlib.md5(cleaned.encode()).hexdigest()
     if st.session_state.get("last_msg_hash") == msg_hash:
         st.warning("⚠️ Duplicate message ignored")
         st.stop()
     st.session_state.last_msg_hash = msg_hash
 
-    topic = detect_topic(cleaned_input)
-
-    # User profile update
+    topic   = detect_topic(cleaned)
     profile = st.session_state.get("user_profile", {})
     profile["last_emotion"] = emotion
     profile["last_topic"]   = topic
-    if "emotion_history" not in profile:
-        profile["emotion_history"] = []
-    profile["emotion_history"].append(emotion)
+    profile.setdefault("emotion_history", []).append(emotion)
     profile["emotion_history"]    = profile["emotion_history"][-20:]
     st.session_state.user_profile = profile
 
     # Store user message
     st.session_state.messages.append({
-        "role":       "user",
-        "content":    cleaned_input,
-        "time":       now.strftime("%H:%M"),
-        "timestamp":  now.isoformat(),
-        "emotion":    emotion,
-        "intensity":  intensity,
-        "confidence": confidence,
-        "topic":      topic,
-        "id":         msg_hash[:8],
+        "role": "user", "content": cleaned,
+        "time": now.strftime("%H:%M"), "timestamp": now.isoformat(),
+        "emotion": emotion, "intensity": intensity,
+        "confidence": confidence, "topic": topic,
+        "id": msg_hash[:8],
     })
     st.session_state.messages = st.session_state.messages[-50:]
 
-    # Smart memory learning
-    if len(cleaned_input) > 20 and confidence > 0.6 and topic != "greeting":
-        st.session_state.knowledge.append(cleaned_input)
+    if len(cleaned) > 20 and confidence > 0.5 and topic not in ("greeting", "factual"):
+        st.session_state.knowledge.append(cleaned)
         st.session_state.knowledge = st.session_state.knowledge[-50:]
 
     st.session_state.chat_count  = st.session_state.get("chat_count", 0) + 1
     st.session_state.last_active = now
 
-    # Generate and stream assistant response
+    # Generate response
     with st.chat_message("assistant"):
         placeholder   = st.empty()
         full_response = ""
-
         try:
-            placeholder.markdown("_typing…_")
+            placeholder.markdown("_✨ thinking…_")
             for chunk in generate_reply(user_input):
                 if not chunk:
                     continue
@@ -899,7 +852,6 @@ if user_input:
                     break
                 placeholder.markdown(full_response + "▌")
             placeholder.markdown(full_response)
-
         except Exception as e:
             print(f"❌ Chat error: {e}")
             full_response = random.choice([
@@ -909,10 +861,8 @@ if user_input:
             ])
             placeholder.markdown(full_response)
 
-    # Store assistant message
     st.session_state.messages.append({
-        "role":    "assistant",
-        "content": full_response,
-        "time":    datetime.now().strftime("%H:%M"),
+        "role": "assistant", "content": full_response,
+        "time": datetime.now().strftime("%H:%M"),
         "emotion": detect_emotion(full_response).get("emotion", "neutral"),
     })
