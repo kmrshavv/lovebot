@@ -7,10 +7,10 @@ import json
 from openai import OpenAI
 from serpapi import GoogleSearch
 
-# Google Drive
+# Google Drive (FIXED)
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 # ==============================
 # LOAD MODEL
@@ -18,37 +18,38 @@ from oauth2client.service_account import ServiceAccountCredentials
 model, vectorizer, df = pickle.load(open("model.pkl", "rb"))
 
 # ==============================
-# OPENAI SETUP (SAFE)
+# API KEYS FROM SECRETS
 # ==============================
-api_key = os.getenv("OPENAI_API_KEY")
-
-if not api_key:
-    st.error("❌ OpenAI API key not set. Use: export OPENAI_API_KEY=your_key")
+try:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    SERP_KEY = st.secrets["SERPAPI_KEY"]
+except:
+    st.error("❌ API keys not set in Streamlit Secrets")
     st.stop()
 
-client = OpenAI(api_key=api_key)
-
 # ==============================
-# SERP API
-# ==============================
-SERP_KEY = os.getenv("SERPAPI_KEY")
-
-# ==============================
-# GOOGLE DRIVE SETUP (FIXED)
+# GOOGLE DRIVE INIT (FIXED)
 # ==============================
 def init_drive():
-    scope = ['https://www.googleapis.com/auth/drive']
-    gauth = GoogleAuth()
-    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        "credentials.json", scope
-    )
-    return GoogleDrive(gauth)
+    try:
+        scope = ["https://www.googleapis.com/auth/drive"]
 
-try:
-    drive = init_drive()
-except Exception as e:
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=scope
+        )
+
+        gauth = GoogleAuth()
+        gauth.credentials = creds
+
+        return GoogleDrive(gauth)
+    except:
+        return None
+
+drive = init_drive()
+
+if not drive:
     st.warning("⚠️ Drive not connected. Memory disabled.")
-    drive = None
 
 # ==============================
 # MEMORY FUNCTIONS
@@ -56,6 +57,7 @@ except Exception as e:
 def load_memory():
     if not drive:
         return []
+
     try:
         files = drive.ListFile({
             'q': "title='love_memory.json' and trashed=false"
@@ -65,11 +67,13 @@ def load_memory():
             return json.loads(files[0].GetContentString())
     except:
         pass
+
     return []
 
 def save_memory(messages):
     if not drive:
         return
+
     try:
         files = drive.ListFile({
             'q': "title='love_memory.json' and trashed=false"
@@ -96,10 +100,11 @@ if "show_password" not in st.session_state:
 def google_search(query):
     if not SERP_KEY:
         return ""
+
     try:
         params = {"q": query, "api_key": SERP_KEY, "num": 3}
         results = GoogleSearch(params).get_dict()
-        return " ".join(r.get("snippet","") for r in results.get("organic_results", []))
+        return " ".join(r.get("snippet", "") for r in results.get("organic_results", []))
     except:
         return ""
 
@@ -125,7 +130,7 @@ body {
 }
 .title {
     text-align:center;
-    font-size:40px;
+    font-size:42px;
     font-weight:bold;
     color:#ff4d6d;
 }
@@ -208,8 +213,9 @@ if user_input:
             except:
                 answer = personalize("Rishav loves you endlessly 💞")
 
-    # Thinking delay
-    time.sleep(0.5)
+    # Typing delay
+    with st.spinner("LoveBot is typing... 💭"):
+        time.sleep(1)
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
     save_memory(st.session_state.messages)
@@ -217,7 +223,7 @@ if user_input:
     st.markdown(f'<div class="bot">{answer}</div>', unsafe_allow_html=True)
 
 # ==============================
-# PASSWORD
+# PASSWORD (PHOTO VAULT)
 # ==============================
 if st.session_state.show_password:
     password = st.text_input("Enter Passkey 🔐", type="password")

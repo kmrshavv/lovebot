@@ -2,8 +2,7 @@ streamlit
 openai
 pandas
 scikit-learn
-serpapi
+google-search-results
 pydrive2
 google-auth
 oauth2client
-google-search-results
